@@ -3,8 +3,8 @@ import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortabl
 import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { DisplaySettings, Tier } from "../types";
+import type { StyleId } from "../lib/themes";
 import { useBoard } from "../store/board";
-import { useUi } from "../store/ui";
 import { toast } from "../store/toast";
 import { exportPalette } from "../lib/themes";
 import { itemAngle, labelTextColor, lighten, mixColors } from "../lib/utils";
@@ -18,8 +18,7 @@ export function TierRow({ tier }: { tier: Tier }) {
   const style = useBoard(s => s.style);
   const mode = useBoard(s => s.mode);
   const display = useBoard(s => s.display);
-  const panel = exportPalette(style as never, mode as never).panel;
-  const namesKey = useBoard(s => s.tiers.map(t => t.name).join("|"));
+  const panel = exportPalette(style, mode).panel;
   const [editing, setEditing] = useState(false);
 
   // 经典梗图风格：扁平纯色块 + 黑色粗体标签（无渐变、无阴影），保留"彩色色块+黑色大字"的梗图结构
@@ -36,8 +35,6 @@ export function TierRow({ tier }: { tier: Tier }) {
     if (tier.items.length > prevCount.current) setReplayKey(k => k + 1);
     prevCount.current = tier.items.length;
   }, [tier.items.length]);
-
-  const names = namesKey.split("|");
 
   return (
     <div
@@ -64,15 +61,15 @@ export function TierRow({ tier }: { tier: Tier }) {
           key={replayKey}
           name={tier.name}
           display={display}
-          names={names}
           replayKey={replayKey}
           sizeClass="text-2xl font-black tracking-wide md:text-[32px]"
         />
       </button>
 
-      {/* 条目区（droppable） */}
+      {/* 条目区（droppable）：data-tier-id 供"把图片拖到某个档位上"定位落点 */}
       <div
         ref={setNodeRef}
+        data-tier-id={tier.id}
         className="relative flex min-h-[88px] flex-1 flex-wrap content-start items-start gap-2.5 p-3.5 pr-12"
         style={{
           background: mixColors(tier.color, panel, 0.08),
@@ -127,19 +124,18 @@ export function TierRow({ tier }: { tier: Tier }) {
   );
 }
 
-/** 只读行（预览 / 分享落地页） */
+/** 只读行（预览 / 分享落地页）：风格从传入的 board 取，保证"分享者看到什么样，打开者就看到什么样" */
 export function TierRowReadonly({
   tier,
+  style,
   panel,
   display,
-  names,
 }: {
   tier: Tier;
+  style: StyleId;
   panel: string;
   display: DisplaySettings;
-  names: string[];
 }) {
-  const style = useBoard(s => s.style);
   const isTierStyle = style === "tier";
   const labelFlat = isTierStyle || display.labelFlat;
   const labelColor = labelFlat ? "#141414" : labelTextColor(tier.color);
@@ -157,9 +153,12 @@ export function TierRowReadonly({
           color: labelColor,
         }}
       >
-        <span className="text-2xl font-black leading-none tracking-wide md:text-[30px]">
-          <TierLabel name={tier.name} display={display} names={names} replayKey={0} />
-        </span>
+        <TierLabel
+          name={tier.name}
+          display={display}
+          replayKey={0}
+          sizeClass="text-2xl font-black leading-none tracking-wide md:text-[30px]"
+        />
       </div>
       <div
         className="flex min-h-[72px] flex-1 flex-wrap content-start items-start gap-2.5 p-3.5"

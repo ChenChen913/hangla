@@ -196,5 +196,7 @@ export function applyTheme(style: StyleId, mode: Mode) {
 }
 
 export function exportPalette(style: StyleId, mode: Mode) {
-  return THEMES[themeId(style, mode)].export;
+  // 与 applyTheme 一样留兜底：数据万一带着非法 style/mode，也不要直接抛错白屏
+  const t = THEMES[themeId(style, mode)] ?? THEMES[themeId(DEFAULT_STYLE, DEFAULT_MODE)];
+  return t.export;
 }

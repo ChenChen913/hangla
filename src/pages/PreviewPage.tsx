@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { PencilLine } from "lucide-react";
 import { decodeBoard } from "../lib/utils";
 import { TIER_PRESETS } from "../lib/presets";
-import { exportPalette } from "../lib/themes";
+import { applyTheme, exportPalette } from "../lib/themes";
 import { useBoard } from "../store/board";
 import { toast } from "../store/toast";
 import { TierRowReadonly } from "../components/TierRow";
@@ -20,10 +20,21 @@ export function PreviewPage() {
   const storePresetId = useBoard(s => s.presetId);
   const storeTiers = useBoard(s => s.tiers);
   const storePool = useBoard(s => s.pool);
-  const storeDisplay = useBoard(s => s.display);
+  const display = useBoard(s => s.display);
   const [copied, setCopied] = useState(false);
 
   const shared = data ? decodeBoard(data) : null;
+  const sharedStyle = shared?.style;
+  const sharedMode = shared?.mode;
+
+  // 分享链接要按"分享者用的那套主题"渲染，而不是打开者本机的主题；
+  // 离开这个页面再还原成本机主题
+  useEffect(() => {
+    if (!sharedStyle || !sharedMode) return;
+    applyTheme(sharedStyle, sharedMode);
+    return () => applyTheme(storeStyle, storeMode);
+  }, [sharedStyle, sharedMode, storeStyle, storeMode]);
+
   if (data && !shared) {
     return (
       <div className="mx-auto max-w-[560px] px-5 py-24 text-center">
@@ -45,8 +56,7 @@ export function PreviewPage() {
     tiers: storeTiers,
     pool: storePool,
   };
-  const display = shared ? storeDisplay : storeDisplay; // 显示设置始终读本机偏好
-  const pal = exportPalette(board.style as never, board.mode as never);
+  const pal = exportPalette(board.style, board.mode);
   const presetName = TIER_PRESETS[board.presetId]?.name ?? "TIER LIST";
   const items = board.tiers.reduce((a, t) => a + t.items.length, 0);
 
@@ -73,15 +83,9 @@ export function PreviewPage() {
         </p>
       </div>
 
-      <div className="flex flex-col" style={{ gap: storeDisplay.rowGap }}>
+      <div className="flex flex-col" style={{ gap: display.rowGap }}>
         {board.tiers.map(t => (
-          <TierRowReadonly
-            key={t.id}
-            tier={t}
-            panel={pal.panel}
-            display={display}
-            names={board.tiers.map(x => x.name)}
-          />
+          <TierRowReadonly key={t.id} tier={t} style={board.style} panel={pal.panel} display={display} />
         ))}
       </div>
 
