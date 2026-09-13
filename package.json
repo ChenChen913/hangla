@@ -3,12 +3,13 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "夯拉榜 · 从夯到拉排行榜生成器（React + Vite + Tailwind + dnd-kit）",
+  "description": "「从夯到拉」中文梗图 Tier List 排行榜生成器，支持拖拽排名、多风格昼夜切换、PNG 导出与一键分享",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "prepare": "husky"
+    "prepare": "husky",
+    "docs:check": "node scripts/check-anchors.mjs README.md"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
