@@ -1,8 +1,21 @@
 // scripts/check-anchors.mjs —— 校验 Markdown 里的站内锚点是否命中真实标题
-// 用法：node scripts/check-anchors.mjs README.md（缺省查 README.md，有失效锚点时以退出码 1 结束）
+// 用法：node scripts/check-anchors.mjs [文件…]
+// 缺省校验仓库里的中英两份 README；任一份有失效锚点即以退出码 1 结束
 import fs from "node:fs";
 
-const file = process.argv[2] ?? "README.md";
+const DEFAULT_FILES = ["README.md", "README_EN.md"];
+const targets = (process.argv.slice(2).length ? process.argv.slice(2) : DEFAULT_FILES).filter(f => fs.existsSync(f));
+
+if (!targets.length) {
+  console.error("✗ 没有找到可校验的 Markdown 文件");
+  process.exit(1);
+}
+
+let failed = 0;
+for (const file of targets) failed += check(file) ? 0 : 1;
+process.exit(failed ? 1 : 0);
+
+function check(file) {
 const lines = fs.readFileSync(file, "utf8").split("\n");
 
 // 1. 标记代码围栏：围栏内的标题和链接都不参与校验
@@ -44,6 +57,8 @@ lines.forEach((line, i) => {
 if (broken.length) {
   console.error("✗ " + file + " 有 " + broken.length + " 个失效锚点：");
   for (const b of broken) console.error("   " + b);
-  process.exit(1);
+  return false;
 }
 console.log("✓ " + file + "：" + slugs.size + " 个标题，站内锚点全部有效");
+return true;
+}

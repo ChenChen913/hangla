@@ -1,4 +1,4 @@
 # 只在 README 有改动时校验站内锚点（提交信息校验在 commit-msg 钩子）
-if [ -n "$(git diff --cached --name-only -- README.md)" ]; then
+if [ -n "$(git diff --cached --name-only -- README.md README_EN.md)" ]; then
   npm run docs:check
 fi

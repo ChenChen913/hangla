@@ -11,7 +11,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "prepare": "husky",
-    "docs:check": "node scripts/check-anchors.mjs README.md"
+    "docs:check": "node scripts/check-anchors.mjs README.md README_EN.md && node scripts/check-i18n.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
