@@ -4,7 +4,8 @@ import type { Item } from "../types";
 import { useBoard } from "../store/board";
 import { useUi } from "../store/ui";
 import { toast } from "../store/toast";
-import { downscaleImage, readFileAsDataURL, uid } from "../lib/utils";
+import { uid } from "../lib/utils";
+import { fileToImageItem } from "../lib/images";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./ui/dialog";
 import { Toggle } from "./DisplaySettings";
@@ -36,7 +37,13 @@ export function ItemDialog() {
   async function pickImage(files: FileList | null) {
     const f = files?.[0];
     if (!f || !f.type.startsWith("image/")) return;
-    setImage(await downscaleImage(await readFileAsDataURL(f)));
+    // 与项目库走同一条重编码路径：照片转 JPEG、透明插画留 PNG，超大原图也不会原样塞进存档
+    const item = await fileToImageItem(f);
+    if (!item?.image) {
+      toast("这张图片读不出来，换一张试试", 3600);
+      return;
+    }
+    setImage(item.image);
   }
 
   function submit() {

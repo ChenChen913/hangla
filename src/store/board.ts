@@ -1,9 +1,11 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Board, DisplaySettings, Item, Snapshot, Tier } from "../types";
+import type { Mode, StyleId } from "../lib/themes";
 import { presetTiers } from "../lib/presets";
 import { MODE_NAMES, STYLE_NAMES } from "../lib/themes";
 import { clamp, normalizeBoard, uid } from "../lib/utils";
+import { createBoardStorage } from "../lib/storage";
 import { toast } from "./toast";
 
 const PALETTE = ["#E8934A", "#55A878", "#7D96B8", "#B583D6", "#E15D5D", "#E9B44C", "#9AA5B1"];
@@ -45,7 +47,7 @@ type BoardStore = Board & {
   display: DisplaySettings;
   setTitle(title: string): void;
   setSubtitle(subtitle: string): void;
-  setStyle(style: string): void;
+  setStyle(style: StyleId): void;
   /** 切换当前风格的白天/黑夜 */
   toggleMode(): void;
   addTier(): void;
@@ -57,7 +59,8 @@ type BoardStore = Board & {
   /** keepItems=true：项目按档位顺序跟着切到新档位（多余项目进项目库）；false：全部清回项目库 */
   applyPreset(presetId: string, keepItems?: boolean): void;
   addItemToPool(item: Item): void;
-  addImagesToPool(items: Item[]): void;
+  /** toTierId 存在时直接落到该档位（把图片拖到档位行上），否则进项目库 */
+  addImagesToPool(items: Item[], toTierId?: string): void;
   updateItem(id: string, patch: Partial<Omit<Item, "id">>): void;
   removeItem(id: string): void;
   moveItem(id: string, toTierId: string | null, index: number): void;
@@ -67,6 +70,19 @@ type BoardStore = Board & {
   deleteSnapshot(id: string): void;
   loadSnapshot(id: string): boolean;
   setDisplay(patch: Partial<DisplaySettings>): void;
+};
+
+/** 落盘的部分（与 partialize 一一对应） */
+export type PersistedBoard = {
+  title: string;
+  subtitle?: string;
+  style: StyleId;
+  mode: Mode;
+  presetId: string;
+  tiers: Tier[];
+  pool: Item[];
+  snapshots: Snapshot[];
+  display: DisplaySettings;
 };
 
 export const useBoard = create<BoardStore>()(
@@ -81,9 +97,9 @@ export const useBoard = create<BoardStore>()(
       setStyle: style => set({ style }),
       toggleMode: () => {
         const s = get();
-        const next = s.mode === "day" ? "night" : "day";
+        const next: Mode = s.mode === "day" ? "night" : "day";
         set({ mode: next });
-        toast(`已切换到${STYLE_NAMES[(s.style as keyof typeof STYLE_NAMES)] ?? ""}${MODE_NAMES[next]}配色`);
+        toast(`已切换到${STYLE_NAMES[s.style] ?? ""}${MODE_NAMES[next]}配色`);
       },
 
       addTier: () =>
@@ -154,7 +170,12 @@ export const useBoard = create<BoardStore>()(
 
       addItemToPool: item => set(s => ({ pool: [...s.pool, item] })),
 
-      addImagesToPool: items => set(s => ({ pool: [...s.pool, ...items] })),
+      addImagesToPool: (items, toTierId) =>
+        set(s =>
+          toTierId && s.tiers.some(t => t.id === toTierId)
+            ? { tiers: s.tiers.map(t => (t.id === toTierId ? { ...t, items: [...t.items, ...items] } : t)) }
+            : { pool: [...s.pool, ...items] },
+        ),
 
       updateItem: (id, patch) =>
         set(s => ({
@@ -255,7 +276,14 @@ export const useBoard = create<BoardStore>()(
     {
       name: "hangla.v3",
       version: 10,
-      partialize: s => ({
+      // 存储层负责：图片驻留去重、延迟合并写入、写失败兜底
+      storage: createBoardStorage<PersistedBoard>({
+        onWriteError: () =>
+          toast("浏览器存储已满，刚才这一步没保存下来——先导出 PNG 备份，再删掉几张图片重试", 6000),
+        onNearLimit: bytes =>
+          toast(`浏览器存储快用满了（${(bytes / 1024 / 1024).toFixed(1)}MB），建议先导出 PNG 备份`, 5000),
+      }),
+      partialize: (s): PersistedBoard => ({
         title: s.title,
         subtitle: s.subtitle,
         style: s.style,
@@ -266,7 +294,7 @@ export const useBoard = create<BoardStore>()(
         snapshots: s.snapshots,
         display: s.display,
       }),
-      migrate: (persisted: unknown) => {
+      migrate: (persisted: unknown): PersistedBoard => {
         const n = normalizeBoard(persisted);
         const snaps = Array.isArray((persisted as { snapshots?: Snapshot[] }).snapshots)
           ? ((persisted as { snapshots: Snapshot[] }).snapshots ?? []).map(x => ({

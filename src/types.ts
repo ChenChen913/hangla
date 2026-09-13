@@ -1,8 +1,11 @@
+import type { Mode, StyleId } from "./lib/themes";
+
 /** 项目条目：名称必填，图片/一句话描述可选 */
 export type Item = {
   id: string;
   name: string;
   desc?: string;
+  /** 内联图片（data:image/…）；不允许外链，避免打开分享链接时请求第三方地址 */
   image?: string;
   /** 单独设置的歪斜角度（度）；未设置时跟随全局随机角度 */
   tilt?: number;
@@ -40,8 +43,8 @@ export type DisplaySettings = {
 export type Board = {
   title: string;
   subtitle?: string;
-  style: string; // 视觉风格（classic / hype / neon）
-  mode: string;  // 日夜（day / night）
+  style: StyleId; // 视觉风格（classic / tier / hype / neon）
+  mode: Mode;     // 日夜（day / night）
   presetId: string;
   tiers: Tier[];
   pool: Item[];
