@@ -69,8 +69,10 @@ body,
   min-height: 100vh;
 }
 
-/* 暗色主题：同步浏览器原生控件的渲染 scheme（下拉/输入框/滚动条） */
-[data-theme="studio"] { color-scheme: dark; }
+/* 触屏设备没有 hover：档位行的快捷工具条（上移/下移/换色/删除）常显，否则手机上够不着 */
+@media (hover: none) {
+  .row-tools { opacity: 1; }
+}
 
 /* placeholder 跟随主题，避免暗色下输入框提示文字看不清 */
 input::placeholder,

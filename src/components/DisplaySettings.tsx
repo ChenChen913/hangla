@@ -92,7 +92,7 @@ export function DisplaySettings() {
       </button>
 
       {open && (
-        <div className="absolute right-0 z-[60] mt-2 w-72 rounded-xl border border-line bg-panel p-3.5 shadow-[0_16px_40px_rgba(16,24,40,.20)]">
+        <div className="absolute right-0 z-[60] mt-2 max-h-[min(72vh,620px)] w-72 overflow-y-auto rounded-xl border border-line bg-panel p-3.5 shadow-[0_16px_40px_rgba(16,24,40,.20)]">
           <p className="pb-2 text-[13px] font-bold text-ink">显示与样式</p>
 
           {/* 显隐开关 */}

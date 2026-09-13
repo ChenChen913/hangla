@@ -83,8 +83,8 @@ export function TierRow({ tier }: { tier: Tier }) {
           ))}
         </SortableContext>
 
-        {/* 快捷工具条：2×2，收在行内 */}
-        <div className="absolute right-2 top-2 z-10 grid grid-cols-[26px_26px] gap-1 rounded-[9px] border border-line bg-panel/90 p-1 opacity-0 shadow-sm backdrop-blur transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+        {/* 快捷工具条：2×2，收在行内。触屏没有 hover，交给 index.css 的 row-tools 规则常显 */}
+        <div className="row-tools absolute right-2 top-2 z-10 grid grid-cols-[26px_26px] gap-1 rounded-[9px] border border-line bg-panel/90 p-1 opacity-0 shadow-sm backdrop-blur transition-opacity focus-within:opacity-100 group-hover:opacity-100">
           <button
             title="上移档位"
             onClick={() => useBoard.getState().moveTier(tier.id, -1)}

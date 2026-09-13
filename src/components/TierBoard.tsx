@@ -1,6 +1,7 @@
 import {
   DndContext,
   DragOverlay,
+  KeyboardSensor,
   PointerSensor,
   pointerWithin,
   rectIntersection,
@@ -11,6 +12,7 @@ import {
   type DragOverEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
+import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { useState } from "react";
 import { motion } from "motion/react";
 import type { Item } from "../types";
@@ -44,7 +46,11 @@ export function TierBoard() {
   const tiers = useBoard(s => s.tiers);
   const rowGap = useBoard(s => s.display.rowGap);
   const [activeItem, setActiveItem] = useState<Item | null>(null);
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  // 指针拖拽 + 键盘拖拽（Tab 聚焦条目后空格抓起、方向键移动、再空格放下）
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   // 碰撞检测：指针落在哪个容器就算哪个（最可预测），
   // 指针悬空时回退到矩形相交（拖到容器边缘也能吸附）
