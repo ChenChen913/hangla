@@ -37,6 +37,8 @@ function AppShell() {
           <Route path="/" element={<Page><EditorPage /></Page>} />
           <Route path="/templates" element={<Page><TemplatesPage /></Page>} />
           <Route path="/mine" element={<Page><MinePage /></Page>} />
+          {/* 只读预览当前榜单：移动端底部操作栏的「预览」按钮走这里 */}
+          <Route path="/preview" element={<Page><PreviewPage /></Page>} />
           <Route path="/r/:data" element={<Page><PreviewPage /></Page>} />
           <Route path="*" element={<Page><EditorPage /></Page>} />
         </Routes>
