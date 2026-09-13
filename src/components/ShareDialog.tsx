@@ -5,10 +5,11 @@ import { useBoard } from "../store/board";
 import { useUi } from "../store/ui";
 import { toast } from "../store/toast";
 import { exportPalette } from "../lib/themes";
-import { copyText, encodeBoard, timestamp } from "../lib/utils";
+import { copyText, timestamp } from "../lib/utils";
+import { SHARE_URL_SOFT_LIMIT, buildShareUrl, shareLinkNotice } from "../lib/share";
+import { exportBoardRef } from "../lib/exportNode";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./ui/dialog";
-import { exportBoardRef } from "../pages/EditorPage";
 
 /** 分享弹窗：分享卡片预览 + 复制链接 + 下载 PNG */
 export function ShareDialog() {
@@ -19,6 +20,7 @@ export function ShareDialog() {
   const title = useBoard(s => s.title);
   const [cardUrl, setCardUrl] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
+  const notice = shareLinkNotice();
 
   // 打开时生成分享卡片预览（导出节点常驻零高裁剪容器，直接截图即可）
   useEffect(() => {
@@ -29,14 +31,17 @@ export function ShareDialog() {
     }
     const node = exportBoardRef.current;
     if (!node) return;
-    toPng(node, { pixelRatio: 2, backgroundColor: exportPalette(style as never, mode as never).pageBg })
+    toPng(node, { pixelRatio: 2, backgroundColor: exportPalette(style, mode).pageBg })
       .then(url => setCardUrl(url))
-      .catch(() => setCardUrl(null));
+      .catch(() => {
+        setCardUrl(null);
+        toast("分享卡片生成失败，可以直接用顶栏的「导出 PNG」", 4000);
+      });
   }, [open, style, mode]);
 
   function shareUrl() {
     const s = useBoard.getState();
-    const payload = encodeBoard({
+    return buildShareUrl({
       title: s.title,
       subtitle: s.subtitle,
       style: s.style,
@@ -45,15 +50,17 @@ export function ShareDialog() {
       tiers: s.tiers,
       pool: s.pool,
     });
-    return location.href.split("#")[0] + "#/r/" + payload;
   }
 
   async function copyLink() {
     const url = shareUrl();
-    if (url.length > 80000) toast("提示：榜单含较多图片，链接可能过长");
+    if (url.length > SHARE_URL_SOFT_LIMIT) {
+      toast("榜单含较多图片，链接会很长，部分聊天软件可能截断——建议改用「下载 PNG」", 5000);
+    }
     const ok = await copyText(url);
     setLinkCopied(ok);
-    toast(ok ? "分享链接已复制" : "复制失败，链接已打印到控制台");
+    // 复制失败时把链接打到控制台，作为最后一条兜底通道（弹窗里也提示了）
+    toast(ok ? "分享链接已复制" : "复制失败，链接已打印到浏览器控制台", 4000);
     if (!ok) console.log("分享链接：", url);
   }
 
@@ -81,8 +88,10 @@ export function ShareDialog() {
           )}
         </div>
 
+        {notice.hint && <p className="mt-3 text-[12px] leading-relaxed text-muted">{notice.hint}</p>}
+
         <div className="mt-4 flex flex-wrap justify-end gap-2">
-          <Button onClick={copyLink}>
+          <Button onClick={copyLink} disabled={notice.disabled} title={notice.hint || undefined}>
             {linkCopied ? <Check /> : <Link2 />} {linkCopied ? "链接已复制" : "复制链接"}
           </Button>
           <Button variant="primary" disabled={!cardUrl} onClick={downloadPng}>
