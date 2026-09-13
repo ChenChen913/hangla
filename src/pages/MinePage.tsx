@@ -1,13 +1,18 @@
+import { useState } from "react";
 import { useNavigate } from "react-router";
 import { Eye, Library, RotateCcw, Save, Trash2 } from "lucide-react";
+import type { Snapshot } from "../types";
 import { useBoard } from "../store/board";
 import { toast } from "../store/toast";
 import { Button } from "../components/ui/button";
+import { ConfirmDialog } from "../components/ui/dialog";
 import { encodeBoard } from "../lib/utils";
 
 export function MinePage() {
   const navigate = useNavigate();
   const snapshots = useBoard(s => s.snapshots);
+  // 恢复会直接覆盖当前榜单，先让用户确认一次
+  const [pendingRestore, setPendingRestore] = useState<Snapshot | null>(null);
 
   return (
     <div className="mx-auto max-w-[1120px] px-5 pb-20 pt-10">
@@ -48,20 +53,10 @@ export function MinePage() {
                   </div>
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    onClick={() => navigate("/r/" + encodeBoard(snap.board))}
-                  >
+                  <Button size="sm" onClick={() => navigate("/r/" + encodeBoard(snap.board))}>
                     <Eye /> 预览
                   </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      useBoard.getState().loadSnapshot(snap.id);
-                      toast("已恢复到编辑器");
-                      navigate("/");
-                    }}
-                  >
+                  <Button size="sm" onClick={() => setPendingRestore(snap)}>
                     <RotateCcw /> 恢复到编辑器
                   </Button>
                   <Button
@@ -80,6 +75,20 @@ export function MinePage() {
           })}
         </div>
       )}
+
+      <ConfirmDialog
+        open={pendingRestore !== null}
+        onOpenChange={open => !open && setPendingRestore(null)}
+        title={`恢复到「${pendingRestore?.title ?? ""}」？`}
+        description="当前编辑器里的榜单会被这份快照覆盖（快照本身不受影响）。"
+        confirmText="恢复"
+        onConfirm={() => {
+          if (!pendingRestore) return;
+          useBoard.getState().loadSnapshot(pendingRestore.id);
+          toast("已恢复到编辑器");
+          navigate("/");
+        }}
+      />
     </div>
   );
 }

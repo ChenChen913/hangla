@@ -61,6 +61,16 @@ export function ItemChip({ item, overlay = false }: { item: Item; overlay?: bool
       }
       {...(overlay ? {} : attributes)}
       {...(overlay ? {} : listeners)}
+      // 项目库的提示写着「双击条目删除」，这里把它兑现
+      onDoubleClick={
+        overlay
+          ? undefined
+          : e => {
+              e.stopPropagation();
+              removeItem(item.id);
+              toast(`已删除「${item.name}」`);
+            }
+      }
       title={item.desc || item.name}
       className={cn(
         "group relative inline-flex select-none items-center gap-2 rounded-xl border border-chipline bg-chip text-chipink shadow-[0_1px_3px_rgba(16,24,40,.08)]",
