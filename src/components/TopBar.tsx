@@ -6,14 +6,14 @@ import { useBoard } from "../store/board";
 import { useUi } from "../store/ui";
 import { toast } from "../store/toast";
 import { STYLE_NAMES, exportPalette } from "../lib/themes";
-import type { StyleId } from "../lib/themes";
+import type { Mode, StyleId } from "../lib/themes";
 import { TIER_PRESETS } from "../lib/presets";
 import { cn, timestamp } from "../lib/utils";
 import { ConfirmDialog } from "./ui/dialog";
 import { PresetSwitchDialog } from "./PresetSwitchDialog";
 import { FancySelect, type FancyOption } from "./FancySelect";
 import { DisplaySettings } from "./DisplaySettings";
-import { exportBoardRef } from "../pages/EditorPage";
+import { exportBoardRef } from "../lib/exportNode";
 
 const NAV = [
   { to: "/", label: "编辑器", icon: PencilLine },
@@ -22,10 +22,8 @@ const NAV = [
 ];
 
 /** 风格选项：左侧小圆点预览该风格在当前日夜下的底色与强调色 */
-function StyleSwatch({ id, mode }: { id: StyleId; mode: string }) {
-  const t = useBoard.getState();
-  const pal = exportPalette(id, t.mode as never);
-  void t;
+function StyleSwatch({ id, mode }: { id: StyleId; mode: Mode }) {
+  const pal = exportPalette(id, mode);
   return (
     <span
       className="grid size-4 place-items-center rounded-full border border-line"
@@ -52,7 +50,7 @@ function PresetSwatch({ id }: { id: string }) {
 export function TopBar() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const style = useBoard(s => s.style) as StyleId;
+  const style = useBoard(s => s.style);
   const mode = useBoard(s => s.mode);
   const presetId = useBoard(s => s.presetId);
   const toggleMode = useBoard(s => s.toggleMode);
@@ -111,7 +109,7 @@ export function TopBar() {
     toast("正在生成图片…");
     try {
       // 导出节点常驻于零高裁剪容器内（不可见、无需移动），此处直接截图即可，页面无任何抖动
-      const pal = exportPalette(style as StyleId, mode as never);
+      const pal = exportPalette(style, mode);
       const dataUrl = await toPng(node, { pixelRatio: 2, backgroundColor: pal.pageBg });
       const name = (useBoard.getState().title || "从夯到拉").replace(/[\\/:*?"<>|]/g, "").trim() || "从夯到拉";
       const a = document.createElement("a");

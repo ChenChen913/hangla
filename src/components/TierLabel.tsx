@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import type { DisplaySettings } from "../types";
 import { cn } from "../lib/utils";
@@ -17,14 +16,11 @@ import { cn } from "../lib/utils";
 export function TierLabel({
   name,
   display,
-  names,
   replayKey,
   sizeClass,
 }: {
   name: string;
   display: DisplaySettings;
-  /** 全部档位名（保留参数以兼容动效扩展） */
-  names: string[];
   replayKey: number;
   /** 字号/字重类，由父组件按位置传入（如 "text-2xl font-black md:text-[32px]"） */
   sizeClass?: string;
@@ -43,7 +39,6 @@ export function TierLabel({
 
   return (
     <motion.span
-      key={replayKey}
       initial={off ? false : { x: -P.dx, opacity: 0, skewX: P.skew, filter: P.blur ? `blur(${P.blur}px)` : undefined }}
       animate={{ x: 0, opacity: 1, skewX: 0, filter: "blur(0px)", scale: replayKey > 0 && !off ? [1, P.pop, 1] : 1 }}
       transition={{ type: "spring", stiffness: 620, damping: 32, mass: 0.7 }}

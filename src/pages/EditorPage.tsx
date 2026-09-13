@@ -8,8 +8,8 @@ import { TitleBlock } from "../components/TitleBlock";
 import { ExportBoardInner } from "../components/ExportBoard";
 import { ItemDialog } from "../components/ItemDialog";
 import { ShareDialog } from "../components/ShareDialog";
-import { DisplaySettings } from "../components/DisplaySettings";
 import { addImageFilesToPool } from "../lib/images";
+import { exportBoardRef } from "../lib/exportNode";
 import { cn } from "../lib/utils";
 
 export function EditorPage() {
@@ -40,7 +40,7 @@ export function EditorPage() {
     };
   }, []);
 
-  // 粘贴 / 拖入图片 → 项目库
+  // 粘贴 / 拖入图片 → 项目库；如果拖到某个档位上，就直接进那个档位
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
       const files = [...(e.clipboardData?.items ?? [])]
@@ -56,10 +56,11 @@ export function EditorPage() {
       if (e.dataTransfer?.types.includes("Files")) e.preventDefault();
     };
     const onDrop = (e: DragEvent) => {
-      if (e.dataTransfer?.types.includes("Files")) {
-        e.preventDefault();
-        addImageFilesToPool(e.dataTransfer.files);
-      }
+      if (!e.dataTransfer?.types.includes("Files")) return;
+      e.preventDefault();
+      const under = document.elementFromPoint(e.clientX, e.clientY);
+      const tierId = under?.closest?.("[data-tier-id]")?.getAttribute("data-tier-id") ?? undefined;
+      addImageFilesToPool(e.dataTransfer.files, tierId);
     };
     window.addEventListener("paste", onPaste);
     window.addEventListener("dragover", onDragOver);
@@ -153,6 +154,3 @@ export function EditorPage() {
     </div>
   );
 }
-
-/** TopBar / 分享弹窗通过它找到屏幕外的导出节点 */
-export const exportBoardRef: { current: HTMLElement | null } = { current: null };
