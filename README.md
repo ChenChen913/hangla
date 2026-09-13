@@ -178,4 +178,4 @@ npm run docs:check # README 锚点自检
 
 [MIT](LICENSE) © 2026 ChenChen913
 
-界面里的「得意黑」字体（Smiley Sans）以 SIL Open Font License 1.1 授权，版权归听得 Antarctica & 摘星 Liu，详见 [LICENSE](LICENSE) 末尾的第三方资源说明。
+界面里的「得意黑」字体（Smiley Sans）以 SIL Open Font License 1.1 授权，版权归听得 Antarctica & 摘星 Liu，详见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。

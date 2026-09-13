@@ -19,12 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-第三方资源许可：
-
-- 「得意黑」Smiley Sans（src/assets/SmileySans-Oblique.woff2）
-  Copyright (c) 2020, 听得 Antarctica & 摘星 Liu
-  以 SIL Open Font License 1.1 授权发布，详见
-  https://github.com/atelier-anchor/smiley-sans/blob/main/LICENSE
