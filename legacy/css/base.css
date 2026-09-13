@@ -1,0 +1,44 @@
+/* ============================================================
+ * base.css —— 重置 / 设计变量 / 全局基调
+ * 主题变量默认值为「曜黑工作台」，themes.js 切换主题时运行时覆写
+ * ============================================================ */
+:root {
+  --bg: #0e1116;
+  --glow: rgba(255, 199, 89, 0.07);
+  --panel: #151a21;
+  --panel-2: #1b2129;
+  --border: #262d38;
+  --text: #e9ecf1;
+  --muted: #8f99a8;
+  --accent: #ff7a45;
+  --accent-2: #ffb347;
+  --danger: #ff5d5d;
+  --chip-bg: #1d242e;
+  --chip-border: #2d3542;
+  --chip-text: #e9ecf1;
+  --well-blend: #151a21;
+
+  --radius: 14px;
+  --label-w: 150px;
+  --font: "Segoe UI", "Microsoft YaHei", "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  font-family: var(--font);
+  color: var(--text);
+  background-color: var(--bg);
+  background-image: radial-gradient(1100px 420px at 50% -160px, var(--glow), transparent 70%);
+  background-repeat: no-repeat;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #2a313c; border-radius: 8px; border: 2px solid var(--bg); }
+::-webkit-scrollbar-track { background: transparent; }
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+
+.hidden { display: none !important; }

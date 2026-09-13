@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="studio">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>夯拉榜 · 从夯到拉排行榜生成器</title>
+<link rel="stylesheet" href="src/css/base.css">
+<link rel="stylesheet" href="src/css/app.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="logo">夯</div>
+    <div class="brand-text">
+      <b>夯拉榜</b>
+      <span>HANGLA TIER LIST</span>
+    </div>
+  </div>
+  <div class="topbar-actions">
+    <select id="presetSelect" class="btn select" title="评级模式：切换整套档位方案"></select>
+    <select id="themeSelect" class="btn select" title="视觉风格（更多风格陆续开发中，见 ROADMAP.md）"></select>
+    <span class="divider"></span>
+    <button id="presentBtn" class="btn" data-icon="present">展示</button>
+    <button id="shareBtn" class="btn" data-icon="share">分享</button>
+    <button id="exportBtn" class="btn btn-primary" data-icon="download">导出 PNG</button>
+    <button id="resetBtn" class="btn btn-icon" data-icon="refresh" title="恢复示例榜单"></button>
+  </div>
+</header>
+
+<div id="shareBar" class="share-bar hidden">
+  <span>正在查看<b>只读分享榜单</b></span>
+  <button id="copyEditBtn" class="btn btn-small">复制一份来编辑</button>
+</div>
+
+<main id="app">
+  <div class="title-block">
+    <input id="titleInput" class="rank-title" placeholder="点此给榜单起个名字" maxlength="60">
+    <div id="metaLine" class="meta-line"></div>
+  </div>
+
+  <section id="tiers" class="tiers" aria-label="档位区"></section>
+  <button id="addTierBtn" class="add-tier">＋ 添加档位</button>
+
+  <section class="pool" aria-label="素材池">
+    <div class="pool-head">
+      <span class="pool-title">素材池 <em id="poolCount"></em></span>
+      <span class="pool-hint">拖入上方档位 · 双击条目删除 · 支持粘贴图片（Ctrl+V）或拖入图片文件</span>
+      <label class="btn btn-small" data-icon="image">＋ 图片<input type="file" id="imgInput" accept="image/*" multiple hidden></label>
+    </div>
+    <div id="poolItems" class="well pool-well"></div>
+    <div class="pool-add">
+      <input id="textInput" placeholder="输入文字，回车加入素材池（比如：加班到十点）">
+    </div>
+  </section>
+
+  <p class="foot-hint">数据自动保存在本浏览器 · 小技巧：点选条目后点击档位空位可快速归档 · Esc 取消选中</p>
+</main>
+
+<button id="presentExit" class="btn btn-primary">退出展示（Esc）</button>
+<div id="toast" class="toast"></div>
+
+<script src="src/js/util.js"></script>
+<script src="src/js/themes.js"></script>
+<script src="src/js/presets.js"></script>
+<script src="src/js/state.js"></script>
+<script src="src/js/exporter.js"></script>
+<script src="src/js/view.js"></script>
+<script src="src/js/dnd.js"></script>
+<script src="src/js/main.js"></script>
+</body>
+</html>

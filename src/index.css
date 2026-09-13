@@ -1,0 +1,125 @@
+@import "tailwindcss";
+
+/* 艺术字体：得意黑（Smiley Sans，OFL 开源许可）——斜体窄字，速度感/体育字幕气质。
+   本地打包内联，离线可用；加载失败自动回退系统粗黑体，不会出现方框或布局错乱 */
+@font-face {
+  font-family: "Smiley Sans";
+  src: url("./assets/SmileySans-Oblique.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  font-synthesis: none; /* 得意黑本身笔画粗壮，禁用浏览器合成加粗以免发糊 */
+}
+
+/* 等级标签艺术字体（fallback 链：得意黑 → 系统粗黑体 → 系统中文字体）。
+   得意黑为窄体设计，字号放大 6% 补偿视觉尺寸 */
+.tier-label-art {
+  font-family: "Smiley Sans", "Microsoft YaHei", "PingFang SC", sans-serif;
+  letter-spacing: 0.03em;
+  font-size: 106%;
+  font-synthesis: none;
+}
+
+/* 系统设置为减少动画时，自动关闭标签动效（保留状态变化） */
+@media (prefers-reduced-motion: reduce) {
+  .tier-label-anim {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* 主题变量 → Tailwind 工具类（bg-panel / border-line / text-ink …） */
+@theme inline {
+  --color-bg: var(--c-bg);
+  --color-panel: var(--c-panel);
+  --color-panel2: var(--c-panel2);
+  --color-line: var(--c-border);
+  --color-ink: var(--c-text);
+  --color-muted: var(--c-muted);
+  --color-accent: var(--c-accent);
+  --color-accent2: var(--c-accent2);
+  --color-danger: var(--c-danger);
+  --color-chip: var(--c-chip);
+  --color-chipline: var(--c-chip-border);
+  --color-chipink: var(--c-chip-text);
+}
+
+/* 默认主题 = 清爽亮色（themes.ts 运行时按 data-theme 覆写为其他风格） */
+:root {
+  color-scheme: light;
+  --c-bg: #f6f7f9;
+  --c-glow: rgba(255, 106, 61, 0.09);
+  --c-panel: #ffffff;
+  --c-panel2: #eef0f4;
+  --c-border: #e4e7ed;
+  --c-text: #1c2026;
+  --c-muted: #7b8494;
+  --c-accent: #ff6a3d;
+  --c-accent2: #ffa25e;
+  --c-danger: #e5484d;
+  --c-chip: #ffffff;
+  --c-chip-border: #e2e5eb;
+  --c-chip-text: #1c2026;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100vh;
+}
+
+/* 暗色主题：同步浏览器原生控件的渲染 scheme（下拉/输入框/滚动条） */
+[data-theme="studio"] { color-scheme: dark; }
+
+/* placeholder 跟随主题，避免暗色下输入框提示文字看不清 */
+input::placeholder,
+textarea::placeholder {
+  color: var(--c-muted);
+  opacity: 0.9;
+}
+/* 原生下拉选项跟随主题 */
+select option {
+  color: var(--c-text);
+  background: var(--c-panel);
+}
+
+body {
+  color: var(--c-text);
+  background-color: var(--c-bg);
+  background-image: radial-gradient(1100px 420px at 50% -160px, var(--c-glow), transparent 70%);
+  background-repeat: no-repeat;
+  font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 原生下拉的箭头 */
+.select-chevron {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238f99a8' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.65rem center;
+}
+
+/* 弹窗进出动画：居中用 inset+margin（不用 transform，避免与 Tailwind translate 属性叠加导致弹窗飞入抖动） */@keyframes dlg-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes dlg-pop-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+.dlg-overlay[data-state="open"] { animation: dlg-fade-in 0.15s ease-out; }
+.dlg-content[data-state="open"] { animation: dlg-pop-in 0.16s ease-out; }
+
+/* 滚动条 */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #2a313c; border-radius: 8px; border: 2px solid var(--c-bg); }
+::-webkit-scrollbar-track { background: transparent; }
+
+:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; border-radius: 6px; }
+
+/* 一键全屏（直播 / 录屏）：隐藏顶部导航栏 */
+body.hide-topbar .topbar { display: none; }
+body.hide-topbar { background-image: none; }
