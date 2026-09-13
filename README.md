@@ -6,6 +6,8 @@
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](#许可证)
 
+**简体中文** | [English](./README_EN.md)
+
 「从夯到拉」中文梗图 Tier List 排行榜生成器，支持拖拽排名、多风格昼夜切换、PNG 导出与一键分享
 
 <!-- TODO: 待补在线 Demo 地址（vercel.json 已就绪，部署后把链接放在这一行） -->
@@ -102,7 +104,7 @@ npm run build
 | `npm run dev` | 启动开发服务器（默认 http://localhost:5173） |
 | `npm run build` | 类型检查 + 打包单文件版到 `dist/index.html` |
 | `npm run preview` | 本地预览构建产物 |
-| `npm run docs:check` | 校验 README 站内锚点是否失效 |
+| `npm run docs:check` | 校验两份 README 的站内锚点与双语一致性 |
 
 评级模式内置 5 套（从夯到拉 / 经典梗图 / SSR 稀有度 / 竞技梯度 T0-T4 / 经典 S ~ D），档位颜色属于评级预设，在 `src/lib/presets.ts` 登记；视觉风格在 `src/lib/themes.ts` 登记（风格 × 日夜两维度，当前 4 风格 × 2 明暗 = 8 套）。
 
@@ -144,7 +146,7 @@ npm run dev        # 开发服务器，改代码即时热更新
 npm run test       # 单元测试（数据规范化 / 分享编解码 / 存档存储层 / 榜单操作）
 npm run build      # 类型检查 + 打包单文件版
 npm run preview    # 预览构建产物
-npm run docs:check # README 锚点自检
+npm run docs:check # README 锚点 + 双语一致性自检
 ```
 
 `npm install` 会通过 `prepare` 脚本装上 husky 的 Git 钩子：提交时由 `commitlint` 按 Conventional Commits 校验提交信息（`.husky/commit-msg`），改动 README 时 `pre-commit` 自动跑锚点检查。
