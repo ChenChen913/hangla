@@ -25,6 +25,20 @@ if (location.hash.startsWith("#d=")) {
   location.hash = "/r/" + location.hash.slice(3);
 }
 
+// 多标签页同步：另一个标签页写入存档时重放本地状态，避免两边内存态越走越远。
+// storage 事件只在「别的标签页」触发，不会和本页写入互相打架。
+if (typeof window !== "undefined") {
+  let syncTimer: ReturnType<typeof setTimeout> | null = null;
+  window.addEventListener("storage", e => {
+    if (e.key !== "hangla.v3" && e.key !== "hangla.v3::images") return;
+    if (syncTimer !== null) clearTimeout(syncTimer);
+    syncTimer = setTimeout(() => {
+      syncTimer = null;
+      void useBoard.persist.rehydrate();
+    }, 120);
+  });
+}
+
 // React 19 未捕获的渲染错误会清空 #root 且不显示覆盖层：
 // 把错误落到独立于 React 树的浮层，保证白屏时能看到原因
 window.addEventListener("error", e => {

@@ -255,8 +255,10 @@ export const useBoard = create<BoardStore>()(
             style: s.style,
             mode: s.mode,
             presetId: s.presetId,
-            tiers: JSON.parse(JSON.stringify(s.tiers)),
-            pool: JSON.parse(JSON.stringify(s.pool)),
+            // store 的更新全部是结构共享的不可变写法，快照只需复制容器层：
+            // 条目对象与图片字符串与当前榜单共用，避免 30 份快照各存一份 base64 拷贝。
+            tiers: s.tiers.map(t => ({ ...t, items: [...t.items] })),
+            pool: [...s.pool],
           };
           const snap: Snapshot = { id: uid(), title: s.title || "未命名榜单", savedAt: Date.now(), board };
           return { snapshots: [snap, ...s.snapshots].slice(0, 30) };

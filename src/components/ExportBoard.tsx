@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { exportPalette } from "../lib/themes";
 import { itemAngle, labelTextColor, lighten, mixColors } from "../lib/utils";
 import type { Board, DisplaySettings, Item } from "../types";
@@ -5,8 +6,8 @@ import { useBoard } from "../store/board";
 
 /** 供 html-to-image 截图的固定宽度导出画布（挂在屏幕外）。
  *  只保留主标题 + 榜单主体 + 品牌页脚；副标题、统计、评级徽章等网页说明信息一律不上图 */
-export function ExportBoardInner({ board, display }: { board: Board; display: DisplaySettings }) {
-  const pal = exportPalette(board.style as never, board.mode as never);
+function ExportBoardInnerBase({ board, display }: { board: Board; display: DisplaySettings }) {
+  const pal = exportPalette(board.style, board.mode);
 
   const chip = (item: Item) => {
     const showImg = display.showImages && item.image;
@@ -129,7 +130,7 @@ export function ExportBoardInner({ board, display }: { board: Board; display: Di
                 minHeight: 88,
               }}
             >
-              {board.tiers.find(x => x.id === t.id)!.items.map(chip)}
+              {t.items.map(chip)}
             </div>
           </div>
           );
@@ -142,6 +143,23 @@ export function ExportBoardInner({ board, display }: { board: Board; display: Di
     </div>
   );
 }
+
+/**
+ * 只在真正影响画面的字段变化时重渲染：EditorPage 每次 render 都会新建 board 对象，
+ * 默认浅比较会失效，所以逐字段比较（tiers / pool / display 走引用相等，store 是结构共享的）。
+ */
+export const ExportBoardInner = memo(
+  ExportBoardInnerBase,
+  (prev, next) =>
+    prev.board.title === next.board.title &&
+    prev.board.subtitle === next.board.subtitle &&
+    prev.board.style === next.board.style &&
+    prev.board.mode === next.board.mode &&
+    prev.board.presetId === next.board.presetId &&
+    prev.board.tiers === next.board.tiers &&
+    prev.board.pool === next.board.pool &&
+    prev.display === next.display,
+);
 
 /** 编辑器挂载的屏幕外导出节点（分享弹窗 / 导出 PNG 对它截图） */
 export function ExportBoardMount() {
