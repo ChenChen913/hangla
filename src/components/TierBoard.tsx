@@ -7,6 +7,7 @@ import {
   rectIntersection,
   useSensor,
   useSensors,
+  type Announcements,
   type CollisionDetection,
   type DragEndEvent,
   type DragOverEvent,
@@ -17,6 +18,7 @@ import { useState } from "react";
 import { motion } from "motion/react";
 import type { Item } from "../types";
 import { useBoard } from "../store/board";
+import { resolveDropIndex } from "../lib/drag";
 import { TierRow } from "./TierRow";
 import { Pool } from "./Pool";
 import { ItemChip } from "./ItemChip";
@@ -94,18 +96,48 @@ export function TierBoard() {
       if (active.id === over.id) return;
       const s = useBoard.getState();
       const list = from === "pool" ? s.pool : s.tiers.find(t => t.id === from)!.items;
-      const newIndex =
-        String(over.id) === from ? list.length - 1 : Math.max(0, list.findIndex(i => i.id === over.id));
+      // 悬停项下标 → moveItem 的插入下标（向下拖要 +1，落容器空白处放末尾）
+      const newIndex = resolveDropIndex(
+        list.map(i => i.id),
+        String(active.id),
+        String(over.id) === from ? null : String(over.id),
+      );
       s.moveItem(String(active.id), from === "pool" ? null : from, newIndex);
     } else {
       moveInto(String(active.id), over.id, to);
     }
   }
 
+  // 键盘 / 读屏拖拽的中文播报（dnd-kit 默认是英文）
+  const announcements: Announcements = {
+    onDragStart({ active }) {
+      const item = findItem(active.id);
+      return "已抓起「" + (item?.name ?? "项目") + "」。用方向键移动，按空格放下，按 Esc 取消。";
+    },
+    onDragOver({ active, over }) {
+      const item = findItem(active.id);
+      if (!over) return "「" + (item?.name ?? "项目") + "」已离开可放置区域。";
+      const to = findContainer(over.id);
+      const tier = to && to !== "pool" ? useBoard.getState().tiers.find(t => t.id === to) : null;
+      return "「" + (item?.name ?? "项目") + "」移动到" + (tier ? "「" + tier.name + "」档位" : "项目库") + "。";
+    },
+    onDragEnd({ active, over }) {
+      const item = findItem(active.id);
+      return over
+        ? "「" + (item?.name ?? "项目") + "」已放下。"
+        : "「" + (item?.name ?? "项目") + "」已放回原位。";
+    },
+    onDragCancel({ active }) {
+      const item = findItem(active.id);
+      return "已取消拖动「" + (item?.name ?? "项目") + "」。";
+    },
+  };
+
   return (
     <DndContext
       sensors={sensors}
       collisionDetection={collisionDetection}
+      accessibility={{ announcements }}
       onDragStart={(e: DragStartEvent) => setActiveItem(findItem(e.active.id))}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
