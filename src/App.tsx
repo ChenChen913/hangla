@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { HashRouter, Route, Routes, useLocation } from "react-router";
+import { HashRouter, Navigate, Route, Routes, useLocation } from "react-router";
 import { TopBar } from "./components/TopBar";
 import { Toaster } from "./components/Toaster";
 import { EditorPage } from "./pages/EditorPage";
@@ -40,7 +40,8 @@ function AppShell() {
           {/* 只读预览当前榜单：移动端底部操作栏的「预览」按钮走这里 */}
           <Route path="/preview" element={<Page><PreviewPage /></Page>} />
           <Route path="/r/:data" element={<Page><PreviewPage /></Page>} />
-          <Route path="*" element={<Page><EditorPage /></Page>} />
+          {/* 未知路由回编辑器，避免落到一个没有工具栏的「裸」编辑页 */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AnimatePresence>
       <Toaster />

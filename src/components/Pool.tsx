@@ -67,7 +67,7 @@ export function Pool() {
       >
         <SortableContext items={filtered.map(i => i.id)} strategy={horizontalListSortingStrategy}>
           {filtered.map(item => (
-            <ItemChip key={item.id} item={item} />
+            <ItemChip key={item.id} item={item} allowDoubleClickDelete />
           ))}
         </SortableContext>
         {pool.length === 0 && (

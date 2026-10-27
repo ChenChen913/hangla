@@ -7,6 +7,7 @@ import { useUi } from "../store/ui";
 import { toast } from "../store/toast";
 import { STYLE_NAMES, exportPalette } from "../lib/themes";
 import type { Mode, StyleId } from "../lib/themes";
+import type { Tier } from "../types";
 import { TIER_PRESETS } from "../lib/presets";
 import { cn, timestamp } from "../lib/utils";
 import { ConfirmDialog } from "./ui/dialog";
@@ -47,6 +48,95 @@ function PresetSwatch({ id }: { id: string }) {
   );
 }
 
+/** 视觉风格下拉选项（桌面工具栏与移动端设置抽屉共用） */
+export function buildStyleOptions(mode: Mode): FancyOption[] {
+  return (Object.keys(STYLE_NAMES) as StyleId[]).map(id => ({
+    value: id,
+    label: STYLE_NAMES[id],
+    swatch: <StyleSwatch id={id} mode={mode} />,
+  }));
+}
+
+/** 评级模式下拉选项（桌面工具栏与移动端设置抽屉共用） */
+export function buildPresetOptions(presetId: string): FancyOption[] {
+  return [
+    ...Object.entries(TIER_PRESETS).map(([id, p]) => ({
+      value: id,
+      label: p.name,
+      swatch: <PresetSwatch id={id} />,
+    })),
+    { value: "custom", label: "自定义", disabled: presetId !== "custom" },
+  ];
+}
+
+/** 档位名是否为默认「从夯到拉」五档：风格↔配色联动只动默认模板，避免覆盖自定义榜单 */
+function isHanglaTierNames(tiers: Tier[]) {
+  return tiers.map(t => t.name).join("") === "夯顶级人上人NPC拉完了";
+}
+
+/**
+ * 当前档位颜色是否与「经典梗图」预设的对应档位逐一相同。
+ * 不能用 presetId === "tier" 判断：applyPresetColors 会把 presetId 改成 custom，
+ * 那样「切出经典梗图时换回夯拉配色」的分支永远不成立。
+ */
+export function hasTierPresetColors(tiers: Tier[]) {
+  const preset = TIER_PRESETS.tier.tiers;
+  return (
+    tiers.length === preset.length &&
+    preset.every(([, color], i) => tiers[i].color.toLowerCase() === color.toLowerCase())
+  );
+}
+
+/** 切换视觉风格；切到/切出「经典梗图」时，档位配色与风格自动配对（项目与档位名保留） */
+export function changeStyle(v: StyleId) {
+  const s = useBoard.getState();
+  const isHanglaNames = isHanglaTierNames(s.tiers);
+  if (v === "tier" && isHanglaNames) {
+    s.applyPresetColors("tier");
+    s.setStyle("tier");
+    toast("已切换为经典梗图风格，档位配色同步更新");
+    return;
+  }
+  if (v !== "tier" && isHanglaNames && hasTierPresetColors(s.tiers)) {
+    s.applyPresetColors("hangla");
+    s.setStyle(v);
+    toast(`已切换为「${STYLE_NAMES[v]}」，档位配色同步更新`);
+    return;
+  }
+  s.setStyle(v);
+}
+
+/** 切换评级模式：有项目时交给确认弹窗选「保留/清空」，否则直接应用 */
+export function requestPresetChange(id: string, onNeedConfirm: (id: string) => void) {
+  if (!TIER_PRESETS[id]) return;
+  const s = useBoard.getState();
+  if (s.tiers.some(t => t.items.length)) onNeedConfirm(id);
+  else {
+    s.applyPreset(id);
+    toast(`已切换为「${TIER_PRESETS[id].name}」模式`);
+  }
+}
+
+/** 截图屏幕外导出画布并下载 PNG（顶栏「导出 PNG」与移动端设置抽屉共用） */
+export async function exportBoardPng() {
+  const node = exportBoardRef.current;
+  if (!node) return;
+  toast("正在生成图片…");
+  try {
+    const s = useBoard.getState();
+    const pal = exportPalette(s.style, s.mode);
+    const dataUrl = await toPng(node, { pixelRatio: 2, backgroundColor: pal.pageBg });
+    const name = (s.title || "从夯到拉").replace(/[\\/:*?"<>|]/g, "").trim() || "从夯到拉";
+    const a = document.createElement("a");
+    a.href = dataUrl;
+    a.download = `${timestamp()}-${name}-排行榜.png`;
+    a.click();
+    toast("已导出 PNG，去下载目录看看");
+  } catch (err) {
+    toast("导出失败：" + (err as Error).message);
+  }
+}
+
 export function TopBar() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -59,68 +149,8 @@ export function TopBar() {
   const setShareOpen = useUi(s => s.setShareOpen);
   const onEditor = pathname === "/";
 
-  const styleOptions: FancyOption[] = (Object.keys(STYLE_NAMES) as StyleId[]).map(id => ({
-    value: id,
-    label: STYLE_NAMES[id],
-    swatch: <StyleSwatch id={id} mode={mode} />,
-  }));
-
-  const presetOptions: FancyOption[] = [
-    ...Object.entries(TIER_PRESETS).map(([id, p]) => ({
-      value: id,
-      label: p.name,
-      swatch: <PresetSwatch id={id} />,
-    })),
-    { value: "custom", label: "自定义", disabled: presetId !== "custom" },
-  ];
-
-  function requestPreset(id: string) {
-    if (!TIER_PRESETS[id]) return;
-    const s = useBoard.getState();
-    if (s.tiers.some(t => t.items.length)) setPendingPreset(id);
-    else {
-      s.applyPreset(id);
-      toast(`已切换为「${TIER_PRESETS[id].name}」模式`);
-    }
-  }
-
-  /** 切换风格；切到/切出「经典梗图」时，档位配色与风格自动配对（项目与档位名保留） */
-  function changeStyle(v: StyleId) {
-    const s = useBoard.getState();
-    const isHanglaNames = s.tiers.map(t => t.name).join("") === "夯顶级人上人NPC拉完了";
-    if (v === "tier" && isHanglaNames) {
-      s.applyPresetColors("tier");
-      s.setStyle("tier");
-      toast("已切换为经典梗图风格，档位配色同步更新");
-      return;
-    }
-    if (v !== "tier" && s.presetId === "tier" && isHanglaNames) {
-      s.applyPresetColors("hangla");
-      s.setStyle(v);
-      toast(`已切换为「${STYLE_NAMES[v]}」，档位配色同步更新`);
-      return;
-    }
-    s.setStyle(v);
-  }
-
-  async function handleExport() {
-    const node = exportBoardRef.current;
-    if (!node) return;
-    toast("正在生成图片…");
-    try {
-      // 导出节点常驻于零高裁剪容器内（不可见、无需移动），此处直接截图即可，页面无任何抖动
-      const pal = exportPalette(style, mode);
-      const dataUrl = await toPng(node, { pixelRatio: 2, backgroundColor: pal.pageBg });
-      const name = (useBoard.getState().title || "从夯到拉").replace(/[\\/:*?"<>|]/g, "").trim() || "从夯到拉";
-      const a = document.createElement("a");
-      a.href = dataUrl;
-      a.download = `${timestamp()}-${name}-排行榜.png`;
-      a.click();
-      toast("已导出 PNG，去下载目录看看");
-    } catch (err) {
-      toast("导出失败：" + (err as Error).message);
-    }
-  }
+  const styleOptions = buildStyleOptions(mode);
+  const presetOptions = buildPresetOptions(presetId);
 
   return (
     <header className="topbar sticky top-0 z-50 border-b border-line bg-bg/85 backdrop-blur-xl">
@@ -154,26 +184,29 @@ export function TopBar() {
           </nav>
         </div>
 
-        {/* 编辑器工具区（移动端收进底部操作栏） */}
+        {/* 编辑器工具区（移动端收进设置抽屉） */}
         {onEditor && (
           <div className="hidden flex-wrap items-center gap-2 md:flex">
             <FancySelect
               value={TIER_PRESETS[presetId] ? presetId : "custom"}
               options={presetOptions}
-              onChange={requestPreset}
+              onChange={id => requestPresetChange(id, setPendingPreset)}
               title="评级模式：切换整套档位方案"
+              ariaLabel="评级模式"
             />
             <FancySelect
               value={style}
               options={styleOptions}
               onChange={changeStyle}
               title="视觉风格（每种风格都有白天和黑夜配色，用旁边的按钮切换）"
+              ariaLabel="视觉风格"
             />
 
             {/* 白天 / 黑夜一键切换：只切当前风格的明暗，不换风格 */}
             <button
               onClick={toggleMode}
               title={mode === "day" ? "切换到黑夜配色" : "切换到白天配色"}
+              aria-label={mode === "day" ? "切换到黑夜配色" : "切换到白天配色"}
               className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-[10px] border border-line bg-panel text-ink hover:border-accent/60 [&_svg]:size-4"
             >
               {mode === "day" ? <Moon /> : <Sun />}
@@ -191,7 +224,7 @@ export function TopBar() {
               <Link2 /> 分享
             </button>
             <button
-              onClick={handleExport}
+              onClick={() => void exportBoardPng()}
               title="下载高清排行图"
               className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-[10px] border border-transparent bg-gradient-to-br from-accent2 to-accent px-3.5 text-[13.5px] font-semibold text-white shadow-[0_2px_14px_rgba(255,106,61,.3)] hover:brightness-105 [&_svg]:size-4"
             >
@@ -200,6 +233,7 @@ export function TopBar() {
             <button
               onClick={() => setConfirmReset(true)}
               title="恢复示例榜单"
+              aria-label="恢复示例榜单"
               className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-[10px] text-muted hover:bg-panel2 hover:text-ink [&_svg]:size-4"
             >
               <RotateCcw />

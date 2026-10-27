@@ -28,6 +28,18 @@
   }
 }
 
+/* 系统开启「减少动画」时全局压掉动画与过渡（只保留最终状态，不影响功能） */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* 主题变量 → Tailwind 工具类（bg-panel / border-line / text-ink …） */
 @theme inline {
   --color-bg: var(--c-bg);
@@ -69,9 +81,16 @@ body,
   min-height: 100vh;
 }
 
-/* 触屏设备没有 hover：档位行的快捷工具条（上移/下移/换色/删除）常显，否则手机上够不着 */
+/* 可拖拽条目：触摸拖拽时不让页面滚动抢走手势（dnd-kit PointerSensor 需要） */
+.chip-drag { touch-action: none; }
+
+/* 触屏设备没有 hover：档位行工具条（上移/下移/换色/删除）与条目编辑/删除按钮常显，
+   否则手机上够不着；按钮触摸目标放大到 28×28 */
 @media (hover: none) {
   .row-tools { opacity: 1; }
+  .chip-actions { display: flex; }
+  .chip-actions button { width: 28px; height: 28px; }
+  .chip-actions button svg { width: 14px; height: 14px; }
 }
 
 /* placeholder 跟随主题，避免暗色下输入框提示文字看不清 */
@@ -114,6 +133,13 @@ body {
 }
 .dlg-overlay[data-state="open"] { animation: dlg-fade-in 0.15s ease-out; }
 .dlg-content[data-state="open"] { animation: dlg-pop-in 0.16s ease-out; }
+
+/* 移动端设置抽屉：从底部滑入 */
+@keyframes sheet-up-in {
+  from { opacity: 0.6; transform: translateY(28px); }
+  to { opacity: 1; transform: none; }
+}
+.sheet-panel[data-state="open"] { animation: sheet-up-in 0.18s ease-out; }
 
 /* 滚动条 */
 ::-webkit-scrollbar { width: 10px; height: 10px; }

@@ -1,7 +1,7 @@
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortable";
 import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import type { DisplaySettings, Tier } from "../types";
 import type { StyleId } from "../lib/themes";
 import { useBoard } from "../store/board";
@@ -13,7 +13,8 @@ import { ItemChip } from "./ItemChip";
 import { TierEditDialog } from "./TierEditDialog";
 import { TierLabel } from "./TierLabel";
 
-export function TierRow({ tier }: { tier: Tier }) {
+/** 单行档位。memo 默认浅比较：标题输入等上层重渲染时 tier 没变就跳过（自身 store 订阅照常响应） */
+export const TierRow = memo(function TierRow({ tier }: { tier: Tier }) {
   const { setNodeRef, isOver } = useDroppable({ id: tier.id, data: { type: "container" } });
   const style = useBoard(s => s.style);
   const mode = useBoard(s => s.mode);
@@ -70,7 +71,8 @@ export function TierRow({ tier }: { tier: Tier }) {
       <div
         ref={setNodeRef}
         data-tier-id={tier.id}
-        className="relative flex min-h-[88px] flex-1 flex-wrap content-start items-start gap-2.5 p-3.5 pr-12"
+        // 触屏下快捷工具条常显（约 66px 宽），移动端右侧留足 78px，最后一张卡不会被盖住
+        className="relative flex min-h-[88px] flex-1 flex-wrap content-start items-start gap-2.5 p-3.5 pr-[78px] md:pr-12"
         style={{
           background: mixColors(tier.color, panel, 0.08),
           outline: isOver ? `2px dashed ${tier.color}` : undefined,
@@ -122,7 +124,7 @@ export function TierRow({ tier }: { tier: Tier }) {
       <TierEditDialog tier={editing ? tier : null} onClose={() => setEditing(false)} />
     </div>
   );
-}
+});
 
 /** 只读行（预览 / 分享落地页）：风格从传入的 board 取，保证"分享者看到什么样，打开者就看到什么样" */
 export function TierRowReadonly({
@@ -186,7 +188,7 @@ export function TierRowReadonly({
               {showImg && (
                 <img
                   src={item.image}
-                  alt=""
+                  alt={showName ? "" : item.name}
                   className="shrink-0 rounded-lg object-cover"
                   style={{ width: display.cardImageSize, height: display.cardImageSize }}
                 />
