@@ -26,6 +26,25 @@ function installStorage(opts: { failWrite?: boolean } = {}) {
 
 const tick = (ms = 30) => new Promise(r => setTimeout(r, ms));
 
+/** 可让指定 key 恰好失败一次的 localStorage 替身（模拟配额在第二次写时写满） */
+function installStorageWithFailures() {
+  const map = new Map<string, string>();
+  const failNext = new Set<string>();
+  vi.stubGlobal("localStorage", {
+    getItem: (k: string) => map.get(k) ?? null,
+    setItem: (k: string, v: string) => {
+      if (failNext.delete(k)) {
+        const err = new Error("Setting the value of 'x' exceeded the quota.");
+        err.name = "QuotaExceededError";
+        throw err;
+      }
+      map.set(k, v);
+    },
+    removeItem: (k: string) => void map.delete(k),
+  });
+  return { map, failNext };
+}
+
 describe("存档存储层", () => {
   it("同一张图被多处引用时只落盘一份，读回来还是完整 data URL", async () => {
     const { map } = installStorage();
@@ -94,5 +113,53 @@ describe("存档存储层", () => {
     const storage = createBoardStorage({ delay: 5 });
     map.set(NAME, "{ 这不是 JSON");
     expect(await storage.getItem(NAME)).toBeNull();
+  });
+
+  it("正文写失败时回滚，图片库与正文保持同一代，不会串图", async () => {
+    const { map, failNext } = installStorageWithFailures();
+    const onWriteError = vi.fn();
+    const storage = createBoardStorage({ delay: 5, onWriteError });
+    const imgA = "data:image/png;base64," + "A".repeat(32);
+    const imgB = "data:image/png;base64," + "B".repeat(32);
+    const valueA = { state: { a: { image: imgA } }, version: 10 };
+
+    storage.setItem(NAME, valueA);
+    await tick();
+    const bodyA = map.get(NAME)!;
+    const bankA = map.get(BANK)!;
+
+    failNext.add(NAME); // 第二次写：正文写失败
+    storage.setItem(NAME, { state: { a: { image: imgB } }, version: 10 });
+    await tick();
+
+    expect(onWriteError).toHaveBeenCalledTimes(1);
+    expect(map.get(NAME)).toBe(bodyA); // 正文被回滚
+    expect(map.get(BANK)).toBe(bankA); // 图片库没有被换代
+    const reopened = createBoardStorage({ delay: 5 });
+    expect(await reopened.getItem(NAME)).toEqual(valueA);
+  });
+
+  it("正文成功、图片库写失败时同样回滚，读档仍是上一代数据", async () => {
+    const { map, failNext } = installStorageWithFailures();
+    const onWriteError = vi.fn();
+    const storage = createBoardStorage({ delay: 5, onWriteError });
+    const imgA = "data:image/png;base64," + "A".repeat(32);
+    const imgB = "data:image/png;base64," + "B".repeat(32);
+    const valueA = { state: { a: { image: imgA } }, version: 10 };
+
+    storage.setItem(NAME, valueA);
+    await tick();
+    const bodyA = map.get(NAME)!;
+    const bankA = map.get(BANK)!;
+
+    failNext.add(BANK); // 第二次写：图片库写失败
+    storage.setItem(NAME, { state: { a: { image: imgB } }, version: 10 });
+    await tick();
+
+    expect(onWriteError).toHaveBeenCalledTimes(1);
+    expect(map.get(NAME)).toBe(bodyA);
+    expect(map.get(BANK)).toBe(bankA);
+    const reopened = createBoardStorage({ delay: 5 });
+    expect(await reopened.getItem(NAME)).toEqual(valueA);
   });
 });

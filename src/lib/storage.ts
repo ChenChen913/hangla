@@ -93,6 +93,8 @@ export function createBoardStorage<S = unknown>(options: BoardStorageOptions = {
     pending = null;
     if (!job) return;
     const { name, value } = job;
+    // 强制重读图片库：另一个标签页可能刚写过，缓存里的 bank 可能已经过期
+    loadedBankKey = null;
     loadBank(name);
 
     // 1) 新图入库，全部图片换成引用
@@ -122,10 +124,20 @@ export function createBoardStorage<S = unknown>(options: BoardStorageOptions = {
     const body = JSON.stringify(payload);
     const bankBody = kept.length ? JSON.stringify(kept) : null;
 
+    // 先写正文、后写图片库：正文是引用方。任一步失败都把正文回滚到旧值，
+    // 保证磁盘上的「正文 ↔ 图片库」始终是同一代数据——配额满时宁可丢这次改动，
+    // 也不能出现「新正文 + 旧图片库」导致图片串位。
+    let prevBody: string | null = null;
     try {
+      prevBody = backend.getItem(name);
+    } catch {
+      prevBody = null;
+    }
+
+    try {
+      backend.setItem(name, body);
       if (bankBody) backend.setItem(bankKey(name), bankBody);
       else backend.removeItem(bankKey(name));
-      backend.setItem(name, body);
       bank = kept;
       const bytes = body.length + (bankBody?.length ?? 0);
       if (bytes > STORAGE_SOFT_LIMIT && !nearLimitReported) {
@@ -133,6 +145,12 @@ export function createBoardStorage<S = unknown>(options: BoardStorageOptions = {
         onNearLimit?.(bytes);
       }
     } catch (error) {
+      try {
+        if (prevBody === null) backend.removeItem(name);
+        else backend.setItem(name, prevBody);
+      } catch {
+        /* 回滚也失败时只能靠 onWriteError 提示用户 */
+      }
       // 写盘失败不要静默：用户需要知道"刚才那一步没保存下来"
       onWriteError?.(error);
     }
@@ -154,6 +172,8 @@ export function createBoardStorage<S = unknown>(options: BoardStorageOptions = {
 
   return {
     getItem(name) {
+      // 重新读图片库：另一个标签页可能刚改过存档，缓存不能挡住同步
+      loadedBankKey = null;
       loadBank(name);
       let raw: string | null = null;
       try {
