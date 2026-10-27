@@ -12,7 +12,7 @@
 <正文（可选）>
 ```
 
-- `type` 取值：`feat` / `fix` / `docs` / `refactor` / `perf` / `test` / `build` / `ci`
+- `type` 取值：`feat` / `fix` / `docs` / `refactor` / `perf` / `test` / `build` / `ci` / `chore`（依赖升级、脚手架、杂务等不改变产品行为的改动）
 - 摘要用简体中文、以中文开头、不超过 30 个汉字，结尾不加句号
 - 术语保留英文原文（API、token、JSON），不要中英夹在同一短语里
 - 示例：`feat: 新增档位拖拽排序`、`fix: 修复暗色主题下输入框文字看不清`
@@ -26,9 +26,10 @@
 ## Pull Request
 
 1. Fork 后从 `main` 拉出功能分支（如 `feat/xxx`）
-2. `npm run build` 通过（含 TypeScript 类型检查）
+2. `npm test` 通过；`npm run build`（含 TypeScript 类型检查）与 `npm run build:web` 都能构建成功
 3. 涉及 README 时先跑 `npm run docs:check`
 4. PR 描述写清动机与影响；有截图 / 录屏更佳
+5. CI（`.github/workflows/ci.yml`）会在 PR 上跑测试、文档校验与双构建，红了先修再请求评审
 
 ## 开发约定
 

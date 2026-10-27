@@ -2,6 +2,17 @@
 
 > ⚠️ 本文件是项目的开发备忘录。用户明确要求：**多套视觉风格是必须交付的功能，后续版本要逐个补齐，不许忘。** 每次迭代先来这里勾掉一项。
 
+## v1.1.0 已完成（本次发布）
+
+- [x] 拖拽排序修复：多容器落点判定与档位内 / 档位间排序行为修正，补拖拽排序单元测试
+- [x] 存档写盘原子性：合并写入失败不再破坏已有存档，并明确提示哪一步没保存下来
+- [x] 分享导入保护：用分享链接覆盖当前榜单前自动保存快照 + 二次确认
+- [x] 分享数据校验：解码后对字段、体量与颜色做白名单校验，损坏 / 超长链接安全降级
+- [x] 移动端设置抽屉：窄屏下「显示与样式」面板改为可关闭的抽屉，触屏操作补齐
+- [x] 无障碍：FancySelect 键盘与 ARIA、toast aria-live、滑杆 aria-label、全局 reduced-motion
+- [x] 双构建与 Pages 部署：`npm run build` 单文件离线版、`npm run build:web` 输出 `dist-web/`，GitHub Pages 工作流自动发布到 https://chenchen913.github.io/hangla/
+- [x] CI：GitHub Actions 跑 `npm test` + `npm run docs:check` + 双构建
+
 ## v1.1 已完成（2026-09-13）— 产品级 UI 打磨（依据用户提供的设计提示词，批判性采纳）
 
 - [x] 数据模型 v4：项目条目升级为「名称 + 图片 + 一句话描述」，档位增加 emoji 图标与描述，榜单增加副标题
@@ -21,7 +32,7 @@
 按用户推荐的组合完成整体迁移，旧 vanilla 版留在 `legacy/` 留档：
 
 - [x] React 19 + TypeScript(strict) + Vite 6 + Tailwind CSS 4（@theme inline + CSS 变量主题）
-- [x] Zustand 5 状态管理（persist → localStorage；v2 旧档自动迁移；v1.1 起结构版本 v4 带 migrate）
+- [x] Zustand 5 状态管理（persist → localStorage；v2 旧档自动迁移；当前 persist 结构版本 v10 带 migrate）
 - [x] dnd-kit 拖拽：跨容器实时移动、档内排序、DragOverlay 弹性动画
   - 踩坑记录：多容器场景 `closestCorners` 会被 chip 抢走 `over`，改用 `pointerWithin` 优先 + `onDragEnd` 兜底
 - [x] Motion 动画：路由切换、拖拽浮层、Toast、弹窗
@@ -67,18 +78,6 @@
 - [x] 图片放大：编辑器卡片 56px / 预览 48px / 导出 64px（v1.2 反馈）
 - [x] FancySelect 自定义下拉：面板卡片质感、主题分组配色圆点、评级档位色条预览、当前项高亮、点击外部/Esc 关闭（v1.2 反馈）
 
-## v1.3 已完成（2026-09-13）— 主题维度重构 + 显示设置
-
-- [x] **主题系统重构**：`theme` 单字段拆为 `style`（风格）+ `mode`（day/night）两个独立维度，持久化 v4→v5 自动迁移（旧 clean/studio/hype/neon 值映射到新结构）
-- [x] **日夜按钮只切明暗**：当前风格内 day ↔ night，不再跳风格（用户反馈：不允许"某风格一点按钮就变成别的风格"）
-- [x] **风格下拉只换风格**：保持当前明暗，选经典/抽象梗风/赛博霓虹
-- [x] **显示设置**（顶栏滑杆图标弹层，三个开关，编辑器/预览/导出三处同步）：
-  - 显示图片：关掉后卡片只显示项目名称（图片数据保留）
-  - 显示名称：关掉后带图项目只显示图片（纯 Logo 排名模式；无图项目始终显示名称防空白）
-  - 图片歪着放：按项目 id 生成稳定随机角度（±6°）旋转，贴纸感，导出图同样生效
-- [x] 图片放大：编辑器卡片 56px / 预览 48px / 导出 64px（v1.2 反馈）
-- [x] FancySelect 自定义下拉：面板卡片质感、主题分组配色圆点、评级档位色条预览、当前项高亮、点击外部/Esc 关闭（v1.2 反馈）
-
 ## v1.2 修复（2026-09-13）— 用户实测反馈
 
 - [x] **修复点击日夜按钮整页白屏**：根因是 `useBoard(...) === "studio" || useBoard(...) === "neon"` 的 `||` 短路导致 hook 调用数量随主题变化，违反 React Hooks 规则（React 19 未捕获错误会直接清空 DOM，表现为"跳转到空白页"）。修复为单次订阅 + selector 内计算。
@@ -106,7 +105,7 @@
 - [ ] 移动端触摸拖拽实测与调优（PointerSensor 原生支持触屏）
 - [ ] 导出选项（1x/3x、透明底、方形比例）
 - [ ] IndexedDB 存图片（图片多了 localStorage 会吃紧）
-- [ ] git init + 提交，形成版本历史
+- [x] git init + 提交，形成版本历史（仓库已推送 GitHub：ChenChen913/hangla）
 
 ## 已知限制
 
