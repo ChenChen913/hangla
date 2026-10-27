@@ -4,6 +4,9 @@ node_modules/
 # 构建产物（npm run build 重新生成 dist/index.html）
 dist/
 
+# 网页版构建产物（npm run build:web 重新生成 dist-web/）
+dist-web/
+
 # 日志与系统文件
 *.log
 .DS_Store
