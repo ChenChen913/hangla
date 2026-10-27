@@ -1,6 +1,11 @@
 import type { Board } from "../types";
 import { encodeBoard } from "./utils";
 
+/** 软上限：超过只提醒（部分聊天软件会截断链接），仍允许复制 */
+export const SHARE_URL_SOFT_LIMIT = 60000;
+/** 硬上限：超过后 URL 本身已不可靠（很多客户端直接截断），且编码/复制会明显卡顿，禁用复制 */
+export const SHARE_URL_HARD_LIMIT = 2_000_000;
+
 /**
  * 分享链接：整份榜单（含图片）编进 URL hash，不依赖任何服务端。
  *
@@ -11,8 +16,6 @@ import { encodeBoard } from "./utils";
  * TODO(部署后再做)：接一个短链服务——把 payload POST 给后端换成短 id，URL 只留 id。
  * 那时只需要改这里的 buildShareUrl，调用方（ShareDialog）不用动。
  */
-export const SHARE_URL_SOFT_LIMIT = 60000;
-
 export function buildShareUrl(board: Board): string {
   return location.href.split("#")[0] + "#/r/" + encodeBoard(board);
 }

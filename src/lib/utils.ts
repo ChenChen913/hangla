@@ -2,6 +2,7 @@ import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import type { Board, DisplaySettings, Item } from "../types";
 import { DEFAULT_MODE, DEFAULT_STYLE, STYLE_NAMES, type Mode, type StyleId } from "./themes";
+import { TIER_PRESETS } from "./presets";
 
 export const cn = (...inputs: ClassValue[]) => twMerge(clsx(inputs));
 
@@ -59,48 +60,100 @@ export async function copyText(t: string): Promise<boolean> {
   }
 }
 
+/* ---------- 导入/分享数据的体量与安全上限 ---------- */
+/** 旧结构 / 分享链接 / 导入 JSON 统一到 v4 时共用的硬上限 */
+export const BOARD_LIMITS = {
+  /** decodeBoard 输入字符串的最大长度：再长就不像正常链接，直接拒绝解码 */
+  decodeChars: 6_000_000,
+  /** 单张内联图片 data URL 的最大字符数 */
+  imageChars: 2_500_000,
+  tiers: 30,
+  itemsPerTier: 200,
+  pool: 500,
+  title: 120,
+  subtitle: 80,
+  desc: 200,
+} as const;
+
+/** 档位颜色非法时的兜底值（默认预设里的灰蓝） */
+export const FALLBACK_TIER_COLOR = "#9AA5B1";
+
+/** 档位颜色白名单：只接受 #rgb / #rrggbb（大小写均可），挡住 url()、rgb()、命名色与注入串 */
+const HEX_COLOR_RE = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
+
+function safeTierColor(v: unknown): string {
+  return typeof v === "string" && HEX_COLOR_RE.test(v) ? v : FALLBACK_TIER_COLOR;
+}
+
+/** id 必须是非空字符串，纯空白按空处理 */
+function safeId(v: unknown): string | null {
+  return typeof v === "string" && v.trim() !== "" ? v : null;
+}
+
+/** 同一份榜单里的 id 必须唯一：缺失/重复一律换成新的 uid() */
+function uniqueId(candidate: string | null, seen: Set<string>): string {
+  let id = candidate ?? uid();
+  while (seen.has(id)) id = uid();
+  seen.add(id);
+  return id;
+}
+
+function truncate(v: string, max: number): string {
+  return v.length > max ? v.slice(0, max) : v;
+}
+
 /* ---------- 榜单数据规范化（新旧结构统一到 v4） ---------- */
 export function normalizeItem(raw: unknown): Item {
+  if (!raw || typeof raw !== "object") return { id: uid(), name: "未命名" };
   const r = raw as Record<string, unknown>;
-  if (r && typeof r === "object") {
-    // v2/v3 旧结构必须先判：{type:"text",text} | {type:"image",src,name}。
-    // 旧图片条目同样带 name，如果先走下面的现代分支，就会因为读不到 r.image 而把图片丢掉。
-    if (r.type === "text") return { id: (r.id as string) ?? uid(), name: String(r.text ?? "") };
-    if (r.type === "image") {
-      return {
-        id: (r.id as string) ?? uid(),
-        name: (r.name as string) || "图片",
-        image: isSafeImage(r.src) ? (r.src as string) : undefined,
-      };
-    }
-    if (typeof r.name === "string") {
-      return {
-        id: typeof r.id === "string" ? r.id : uid(),
-        name: r.name,
-        desc: typeof r.desc === "string" && r.desc ? r.desc : undefined,
-        // 只放行内联图片：分享链接里的外链图片会让打开者去请求第三方地址（暴露 IP / 可用于追踪）
-        image: isSafeImage(r.image) ? r.image : undefined,
-        tilt: typeof r.tilt === "number" ? r.tilt : undefined,
-      };
-    }
+  const id = safeId(r.id) ?? uid();
+  // v2/v3 旧结构必须先判：{type:"text",text} | {type:"image",src,name}。
+  // 旧图片条目同样带 name，如果先走下面的现代分支，就会因为读不到 r.image 而把图片丢掉。
+  if (r.type === "text") return { id, name: String(r.text ?? "") };
+  if (r.type === "image") {
+    return {
+      id,
+      name: typeof r.name === "string" && r.name ? r.name : "图片",
+      image: isSafeImage(r.src) ? r.src : undefined,
+    };
   }
-  return { id: uid(), name: "未命名" };
+  if (typeof r.name === "string") {
+    return {
+      id,
+      name: r.name,
+      desc: typeof r.desc === "string" && r.desc ? truncate(r.desc, BOARD_LIMITS.desc) : undefined,
+      // 只放行内联图片：分享链接里的外链图片会让打开者去请求第三方地址（暴露 IP / 可用于追踪）
+      image: isSafeImage(r.image) ? r.image : undefined,
+      tilt: typeof r.tilt === "number" ? r.tilt : undefined,
+    };
+  }
+  return { id, name: "未命名" };
 }
 
 function isSafeImage(v: unknown): v is string {
-  return typeof v === "string" && v.startsWith("data:image/");
+  return typeof v === "string" && v.startsWith("data:image/") && v.length <= BOARD_LIMITS.imageChars;
 }
 
 export function normalizeBoard(raw: unknown): Board {
   const r = (raw ?? {}) as Record<string, unknown>;
-  const tiers = Array.isArray(r.tiers)
-    ? (r.tiers as Record<string, unknown>[]).map(t => ({
-        id: (t?.id as string) ?? uid(),
-        name: String(t?.name ?? "档位"),
-        color: String(t?.color ?? "#9AA5B1"),
-        items: Array.isArray(t?.items) ? (t.items as unknown[]).map(normalizeItem) : [],
-      }))
-    : [];
+  // tier / item / pool 共用一套 seenIds：store 里 moveItem 按 item id 跨档位和项目库查找，
+  // 分享数据里的重复 id 会让两个条目被同时选中，所以重复的必须重新生成
+  const seenIds = new Set<string>();
+  const normalizeItems = (value: unknown, max: number): Item[] =>
+    (Array.isArray(value) ? value : [])
+      .slice(0, max)
+      .map(normalizeItem)
+      .map(item => ({ ...item, id: uniqueId(item.id, seenIds) }));
+
+  const tiers = (Array.isArray(r.tiers) ? r.tiers : []).slice(0, BOARD_LIMITS.tiers).map(rawTier => {
+    const t = rawTier && typeof rawTier === "object" ? (rawTier as Record<string, unknown>) : {};
+    return {
+      id: uniqueId(safeId(t.id), seenIds),
+      name: String(t.name ?? "档位"),
+      color: safeTierColor(t.color),
+      items: normalizeItems(t.items, BOARD_LIMITS.itemsPerTier),
+    };
+  });
   // 旧 theme 字符串 → 风格 + 日夜两维度
   const legacyMap: Record<string, [StyleId, Mode]> = {
     clean: ["classic", "day"],
@@ -109,19 +162,26 @@ export function normalizeBoard(raw: unknown): Board {
     neon: ["neon", "night"],
   };
   const themeRaw = typeof r.theme === "string" ? r.theme : "";
-  const [legacyStyle, legacyMode] = legacyMap[themeRaw] ?? [];
-  const style = (typeof r.style === "string" && r.style in STYLE_NAMES
-    ? (r.style as StyleId)
+  // 用 hasOwn 取值：theme="__proto__" 时直接下标会拿到 Object.prototype，解构会抛错
+  const legacy = Object.hasOwn(legacyMap, themeRaw) ? legacyMap[themeRaw] : undefined;
+  const [legacyStyle, legacyMode] = legacy ?? [];
+  const style = (typeof r.style === "string" && Object.hasOwn(STYLE_NAMES, r.style)
+    ? r.style
     : legacyStyle ?? DEFAULT_STYLE) as StyleId;
   const mode = (r.mode === "day" || r.mode === "night" ? r.mode : legacyMode ?? DEFAULT_MODE) as Mode;
+  // 预设 id 只认已登记的预设（或「自定义」），避免分享数据塞进任意键
+  const presetRaw = typeof r.presetId === "string" ? r.presetId : "";
+  const presetId = presetRaw === "custom" || Object.hasOwn(TIER_PRESETS, presetRaw) ? presetRaw : "custom";
+  const title = typeof r.title === "string" ? r.title : "";
+  const subtitle = typeof r.subtitle === "string" ? r.subtitle : "";
   return {
-    title: typeof r.title === "string" ? r.title : "",
-    subtitle: typeof r.subtitle === "string" && r.subtitle ? r.subtitle : undefined,
+    title: truncate(title, BOARD_LIMITS.title),
+    subtitle: subtitle ? truncate(subtitle, BOARD_LIMITS.subtitle) : undefined,
     style,
     mode,
-    presetId: typeof r.presetId === "string" ? r.presetId : "custom",
+    presetId,
     tiers,
-    pool: Array.isArray(r.pool) ? (r.pool as unknown[]).map(normalizeItem) : [],
+    pool: normalizeItems(r.pool, BOARD_LIMITS.pool),
   };
 }
 
@@ -145,6 +205,8 @@ export function encodeBoard(b: Board): string {
   return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 export function decodeBoard(s: string): Board | null {
+  // 先卡长度：几 MB 的 base64 解码 + JSON.parse 足以卡住主线程，超限直接当坏链接
+  if (typeof s !== "string" || s.length > BOARD_LIMITS.decodeChars) return null;
   try {
     s = s.replace(/-/g, "+").replace(/_/g, "/");
     while (s.length % 4) s += "=";

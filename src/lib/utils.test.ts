@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { clamp, dataUrlBytes, decodeBoard, encodeBoard, normalizeBoard, normalizeItem, timestamp } from "./utils";
+import {
+  BOARD_LIMITS,
+  FALLBACK_TIER_COLOR,
+  clamp,
+  dataUrlBytes,
+  decodeBoard,
+  encodeBoard,
+  normalizeBoard,
+  normalizeItem,
+  timestamp,
+} from "./utils";
 import type { Board } from "../types";
 
 const IMG = "data:image/png;base64,AAAA";
@@ -82,5 +92,105 @@ describe("小工具", () => {
   });
   it("dataUrlBytes 按 base64 换算原始字节", () => {
     expect(dataUrlBytes("data:image/png;base64," + "A".repeat(4000))).toBe(3000);
+  });
+});
+
+describe("normalizeBoard 安全加固", () => {
+  const colorOf = (color: unknown) =>
+    normalizeBoard({ tiers: [{ id: "t", name: "档位", color, items: [] }] }).tiers[0].color;
+
+  it("档位颜色只认 #rgb / #rrggbb，非法值回落默认色", () => {
+    expect(colorOf("url(https://x)")).toBe(FALLBACK_TIER_COLOR);
+    expect(colorOf("red")).toBe(FALLBACK_TIER_COLOR);
+    expect(colorOf("rgb(0,0,0)")).toBe(FALLBACK_TIER_COLOR);
+    expect(colorOf("#12")).toBe(FALLBACK_TIER_COLOR);
+    expect(colorOf(42)).toBe(FALLBACK_TIER_COLOR);
+    expect(colorOf("#abc")).toBe("#abc");
+    expect(colorOf("#AABBCC")).toBe("#AABBCC");
+  });
+
+  it("tiers / 每档 items / pool 超量都会被截断", () => {
+    const tiers = Array.from({ length: BOARD_LIMITS.tiers + 10 }, (_, i) => ({
+      id: "t" + i,
+      name: "档位" + i,
+      color: "#9AA5B1",
+      items: Array.from({ length: BOARD_LIMITS.itemsPerTier + 10 }, (_, j) => ({ id: `i${i}-${j}`, name: "项目" })),
+    }));
+    const pool = Array.from({ length: BOARD_LIMITS.pool + 10 }, (_, i) => ({ id: "p" + i, name: "项目" }));
+
+    const b = normalizeBoard({ tiers, pool });
+
+    expect(b.tiers).toHaveLength(BOARD_LIMITS.tiers);
+    expect(b.tiers[0].items).toHaveLength(BOARD_LIMITS.itemsPerTier);
+    expect(b.pool).toHaveLength(BOARD_LIMITS.pool);
+  });
+
+  it("空 id 与重复 id 会被重新生成，保证 id 非空且唯一", () => {
+    const b = normalizeBoard({
+      tiers: [
+        { id: "same", name: "A", color: "#abc", items: [{ id: "same", name: "x" }, { id: "same", name: "y" }, { id: "", name: "z" }] },
+        { id: "same", name: "B", color: "#abc", items: [] },
+      ],
+      pool: [{ id: "same", name: "p" }],
+    });
+    const ids = [...b.tiers.map(t => t.id), ...b.tiers.flatMap(t => t.items.map(i => i.id)), ...b.pool.map(i => i.id)];
+
+    expect(ids.every(id => typeof id === "string" && id.length > 0)).toBe(true);
+    expect(new Set(ids).size).toBe(ids.length);
+    // 第一次出现的 id 原样保留，重复的才换成新 id
+    expect(b.tiers[0].id).toBe("same");
+    expect(b.tiers[1].id).not.toBe("same");
+  });
+
+  it("标题 / 副标题 / 条目描述超长会被截断", () => {
+    const b = normalizeBoard({
+      title: "标".repeat(BOARD_LIMITS.title + 10),
+      subtitle: "副".repeat(BOARD_LIMITS.subtitle + 10),
+      tiers: [
+        {
+          id: "t",
+          name: "档位",
+          color: "#abc",
+          items: [{ id: "i", name: "项目", desc: "描".repeat(BOARD_LIMITS.desc + 10) }],
+        },
+      ],
+    });
+
+    expect(b.title).toHaveLength(BOARD_LIMITS.title);
+    expect(b.subtitle).toHaveLength(BOARD_LIMITS.subtitle);
+    expect(b.tiers[0].items[0].desc).toHaveLength(BOARD_LIMITS.desc);
+  });
+
+  it("单张内联图片超过长度上限时整条丢弃", () => {
+    // 前缀 + 上限长度的 base64 已越过上限
+    const big = "data:image/png;base64," + "A".repeat(BOARD_LIMITS.imageChars);
+    const b = normalizeBoard({
+      tiers: [{ id: "t", name: "档位", color: "#abc", items: [{ id: "i", name: "项目", image: big }] }],
+    });
+
+    expect(b.tiers[0].items[0].image).toBeUndefined();
+  });
+
+  it("presetId 只认已登记预设或 custom", () => {
+    expect(normalizeBoard({ presetId: "hangla" }).presetId).toBe("hangla");
+    expect(normalizeBoard({ presetId: "custom" }).presetId).toBe("custom");
+    expect(normalizeBoard({ presetId: "不存在" }).presetId).toBe("custom");
+    // 原型链上的键不能蒙混过关
+    expect(normalizeBoard({ presetId: "toString" }).presetId).toBe("custom");
+  });
+
+  it("theme 为 __proto__ 等原型键时不再抛错", () => {
+    expect(() => normalizeBoard({ theme: "__proto__" })).not.toThrow();
+    expect(normalizeBoard({ theme: "__proto__" }).style).toBe("classic");
+  });
+});
+
+describe("decodeBoard 长度保护", () => {
+  it("输入长度超过上限直接返回 null", () => {
+    expect(decodeBoard("A".repeat(BOARD_LIMITS.decodeChars + 1))).toBeNull();
+  });
+
+  it("超长且非法的输入同样返回 null 而不是抛错", () => {
+    expect(decodeBoard("%".repeat(BOARD_LIMITS.decodeChars + 1))).toBeNull();
   });
 });

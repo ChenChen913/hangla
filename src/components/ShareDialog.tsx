@@ -1,12 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toPng } from "html-to-image";
 import { Check, Download, Link2 } from "lucide-react";
+import type { Board } from "../types";
 import { useBoard } from "../store/board";
 import { useUi } from "../store/ui";
 import { toast } from "../store/toast";
 import { exportPalette } from "../lib/themes";
 import { copyText, timestamp } from "../lib/utils";
-import { SHARE_URL_SOFT_LIMIT, buildShareUrl, shareLinkNotice } from "../lib/share";
+import { SHARE_URL_HARD_LIMIT, SHARE_URL_SOFT_LIMIT, buildShareUrl, shareLinkNotice } from "../lib/share";
 import { exportBoardRef } from "../lib/exportNode";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./ui/dialog";
@@ -18,9 +19,29 @@ export function ShareDialog() {
   const style = useBoard(s => s.style);
   const mode = useBoard(s => s.mode);
   const title = useBoard(s => s.title);
+  const subtitle = useBoard(s => s.subtitle);
+  const presetId = useBoard(s => s.presetId);
+  const tiers = useBoard(s => s.tiers);
+  const pool = useBoard(s => s.pool);
   const [cardUrl, setCardUrl] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const notice = shareLinkNotice();
+
+  // 分享链接只在弹窗打开且榜单变化时编码一次：encodeBoard 对大榜单是同步重活，
+  // 不能每次点「复制链接」都重新算一遍
+  const shareUrl = useMemo(() => {
+    if (!open) return "";
+    const board: Board = { title, subtitle, style, mode, presetId, tiers, pool };
+    return buildShareUrl(board);
+  }, [open, title, subtitle, style, mode, presetId, tiers, pool]);
+
+  const overHardLimit = shareUrl.length > SHARE_URL_HARD_LIMIT;
+  const overSoftLimit = shareUrl.length > SHARE_URL_SOFT_LIMIT;
+  // 硬上限时复制按钮直接禁用：超长 URL 在多数聊天软件里必被截断，改用 PNG 才不会白发
+  const copyDisabled = notice.disabled || overHardLimit;
+  const linkHint = overHardLimit
+    ? "榜单里的图片太多，分享链接已超过长度上限，复制出去一定会被截断——请改用「下载 PNG」。"
+    : notice.hint;
 
   // 打开时生成分享卡片预览（导出节点常驻零高裁剪容器，直接截图即可）
   useEffect(() => {
@@ -39,29 +60,16 @@ export function ShareDialog() {
       });
   }, [open, style, mode]);
 
-  function shareUrl() {
-    const s = useBoard.getState();
-    return buildShareUrl({
-      title: s.title,
-      subtitle: s.subtitle,
-      style: s.style,
-      mode: s.mode,
-      presetId: s.presetId,
-      tiers: s.tiers,
-      pool: s.pool,
-    });
-  }
-
   async function copyLink() {
-    const url = shareUrl();
-    if (url.length > SHARE_URL_SOFT_LIMIT) {
+    if (!shareUrl || copyDisabled) return;
+    if (overSoftLimit) {
       toast("榜单含较多图片，链接会很长，部分聊天软件可能截断——建议改用「下载 PNG」", 5000);
     }
-    const ok = await copyText(url);
+    const ok = await copyText(shareUrl);
     setLinkCopied(ok);
     // 复制失败时把链接打到控制台，作为最后一条兜底通道（弹窗里也提示了）
     toast(ok ? "分享链接已复制" : "复制失败，链接已打印到浏览器控制台", 4000);
-    if (!ok) console.log("分享链接：", url);
+    if (!ok) console.log("分享链接：", shareUrl);
   }
 
   function downloadPng() {
@@ -88,10 +96,10 @@ export function ShareDialog() {
           )}
         </div>
 
-        {notice.hint && <p className="mt-3 text-[12px] leading-relaxed text-muted">{notice.hint}</p>}
+        {linkHint && <p className="mt-3 text-[12px] leading-relaxed text-muted">{linkHint}</p>}
 
         <div className="mt-4 flex flex-wrap justify-end gap-2">
-          <Button onClick={copyLink} disabled={notice.disabled} title={notice.hint || undefined}>
+          <Button onClick={copyLink} disabled={copyDisabled} title={linkHint || undefined}>
             {linkCopied ? <Check /> : <Link2 />} {linkCopied ? "链接已复制" : "复制链接"}
           </Button>
           <Button variant="primary" disabled={!cardUrl} onClick={downloadPng}>
