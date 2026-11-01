@@ -1,17 +1,41 @@
 import type { Board } from "../types";
 import { encodeBoard } from "./utils";
 
-/** 软上限：超过只提醒（部分聊天软件会截断链接），仍允许复制 */
-export const SHARE_URL_SOFT_LIMIT = 60000;
+/**
+ * 舒适上限：多数聊天软件（微信 / QQ / 群聊输入框）能完整收发链接的长度，
+ * 超过这条线就很容易被客户端截断，此时应该优先改用「下载 PNG」。
+ */
+export const SHARE_URL_COMFORT_LIMIT = 8_000;
+/** 提醒上限：到这个长度基本只能靠邮件 / 文档 / 二维码传 */
+export const SHARE_URL_SOFT_LIMIT = 60_000;
 /** 硬上限：超过后 URL 本身已不可靠（很多客户端直接截断），且编码/复制会明显卡顿，禁用复制 */
 export const SHARE_URL_HARD_LIMIT = 2_000_000;
+
+export type ShareLengthState = "ok" | "long" | "over";
+
+export type ShareLengthInfo = {
+  state: ShareLengthState;
+  /** 链接字符数 */
+  chars: number;
+  /** 按 UTF-16 估的 KB，用于给用户一个直观量级 */
+  kb: number;
+};
+
+export function shareLengthInfo(url: string): ShareLengthInfo {
+  const chars = url.length;
+  const state: ShareLengthState =
+    chars > SHARE_URL_HARD_LIMIT ? "over" : chars > SHARE_URL_COMFORT_LIMIT ? "long" : "ok";
+  return { state, chars, kb: Math.round((chars / 1024) * 10) / 10 };
+}
 
 /**
  * 分享链接：整份榜单（含图片）编进 URL hash，不依赖任何服务端。
  *
  * 两个已知边界：
  * - **离线版没有可分享的地址**：file:// 下拼出来的是本机路径，发给别人打不开；
- * - **链接会很长**：图片是内联的，实测 8 张 640×480 照片 ≈ 8MB，多数聊天软件会截断。
+ * - **带图就太长**：一张 640px 照片压缩后约 80KB，进 data URL 再整体 base64，
+ *   编进链接约 14 万字符——远超聊天软件能收的长度。所以**含图榜单的正解是下载 PNG**，
+ *   链接只适合纯文字榜单。
  *
  * TODO(部署后再做)：接一个短链服务——把 payload POST 给后端换成短 id，URL 只留 id。
  * 那时只需要改这里的 buildShareUrl，调用方（ShareDialog）不用动。

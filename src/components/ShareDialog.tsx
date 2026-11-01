@@ -7,7 +7,7 @@ import { useUi } from "../store/ui";
 import { toast } from "../store/toast";
 import { exportPalette } from "../lib/themes";
 import { copyText, timestamp } from "../lib/utils";
-import { SHARE_URL_HARD_LIMIT, SHARE_URL_SOFT_LIMIT, buildShareUrl, shareLinkNotice } from "../lib/share";
+import { shareLengthInfo, buildShareUrl, shareLinkNotice } from "../lib/share";
 import { exportBoardRef } from "../lib/exportNode";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./ui/dialog";
@@ -35,13 +35,17 @@ export function ShareDialog() {
     return buildShareUrl(board);
   }, [open, title, subtitle, style, mode, presetId, tiers, pool]);
 
-  const overHardLimit = shareUrl.length > SHARE_URL_HARD_LIMIT;
-  const overSoftLimit = shareUrl.length > SHARE_URL_SOFT_LIMIT;
+  const length = shareLengthInfo(shareUrl);
   // 硬上限时复制按钮直接禁用：超长 URL 在多数聊天软件里必被截断，改用 PNG 才不会白发
-  const copyDisabled = notice.disabled || overHardLimit;
-  const linkHint = overHardLimit
-    ? "榜单里的图片太多，分享链接已超过长度上限，复制出去一定会被截断——请改用「下载 PNG」。"
-    : notice.hint;
+  const copyDisabled = notice.disabled || length.state === "over";
+  // 含图榜单编进链接基本都超过聊天软件能收的长度，这里如实报数，并把 PNG 提为主操作
+  const linkHint =
+    length.state === "over"
+      ? `链接 ${length.kb}KB（${length.chars.toLocaleString()} 字符），已超过长度上限，复制出去一定被截断——请用「下载 PNG」。`
+      : length.state === "long"
+        ? `链接 ${length.kb}KB（${length.chars.toLocaleString()} 字符），微信 / QQ 里多半会被截断。发图更稳：用「下载 PNG」。`
+        : notice.hint;
+  const preferPng = length.state !== "ok" || notice.disabled;
 
   // 打开时生成分享卡片预览（导出节点常驻零高裁剪容器，直接截图即可）
   useEffect(() => {
@@ -62,8 +66,8 @@ export function ShareDialog() {
 
   async function copyLink() {
     if (!shareUrl || copyDisabled) return;
-    if (overSoftLimit) {
-      toast("榜单含较多图片，链接会很长，部分聊天软件可能截断——建议改用「下载 PNG」", 5000);
+    if (length.state === "long") {
+      toast("链接偏长，部分聊天软件会截断——建议改用「下载 PNG」", 5000);
     }
     const ok = await copyText(shareUrl);
     setLinkCopied(ok);
@@ -99,12 +103,25 @@ export function ShareDialog() {
         {linkHint && <p className="mt-3 text-[12px] leading-relaxed text-muted">{linkHint}</p>}
 
         <div className="mt-4 flex flex-wrap justify-end gap-2">
-          <Button onClick={copyLink} disabled={copyDisabled} title={linkHint || undefined}>
+          {/* 长链接时把「下载 PNG」放到前面：默认焦点落在真能发出去的那个按钮上 */}
+          {preferPng && (
+            <Button variant="primary" disabled={!cardUrl} onClick={downloadPng}>
+              <Download /> 下载 PNG（推荐）
+            </Button>
+          )}
+          <Button
+            variant={preferPng && !copyDisabled ? "ghost" : "default"}
+            onClick={copyLink}
+            disabled={copyDisabled}
+            title={linkHint || undefined}
+          >
             {linkCopied ? <Check /> : <Link2 />} {linkCopied ? "链接已复制" : "复制链接"}
           </Button>
-          <Button variant="primary" disabled={!cardUrl} onClick={downloadPng}>
-            <Download /> 下载 PNG
-          </Button>
+          {!preferPng && (
+            <Button variant="primary" disabled={!cardUrl} onClick={downloadPng}>
+              <Download /> 下载 PNG
+            </Button>
+          )}
         </div>
       </DialogContent>
     </Dialog>
