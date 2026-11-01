@@ -83,7 +83,7 @@ export function ItemDialog() {
               title="上传 Logo / 图片"
             >
               {image ? (
-                <img src={image} alt="" className="h-full w-full object-cover" />
+                <img src={image} alt="" className="h-full w-full object-contain" />
               ) : (
                 <ImagePlus className="size-5" />
               )}

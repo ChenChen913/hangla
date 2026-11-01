@@ -190,7 +190,8 @@ export function TierRowReadonly({
                 <img
                   src={item.image}
                   alt={showName ? "" : item.name}
-                  className="shrink-0 rounded-lg object-cover"
+                  // 与编辑器一致：contain 保证非方形图完整显示
+                  className="shrink-0 rounded-lg object-contain"
                   style={{ width: display.cardImageSize, height: display.cardImageSize }}
                 />
               )}

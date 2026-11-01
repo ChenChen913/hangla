@@ -21,7 +21,9 @@ export function ChipView({ item, display }: { item: Item; display: DisplaySettin
           // 只显示图片时名称是唯一可读信息，alt 用项目名；同时显示名称时留空，避免读屏重复播报
           alt={showName ? "" : item.name}
           draggable={false}
-          className="block shrink-0 rounded-[10px] object-cover"
+          // contain 而不是 cover：logo / 图标常是非方形，cover 会把长边裁掉，
+          // 用户看到的就是"图标显示不全"（上传的 DeepSeek 图标就是被这么切的）
+          className="block shrink-0 rounded-[10px] object-contain"
           style={{ width: display.cardImageSize, height: display.cardImageSize }}
         />
       )}

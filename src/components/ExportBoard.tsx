@@ -42,7 +42,8 @@ function ExportBoardInnerBase({ board, display }: { board: Board; display: Displ
               width: display.cardImageSize,
               height: display.cardImageSize,
               borderRadius: 10,
-              objectFit: "cover",
+              // 与编辑器同一规则：contain，非方形图完整上镜
+              objectFit: "contain",
             }}
           />
         )}
