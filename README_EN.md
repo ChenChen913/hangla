@@ -24,10 +24,11 @@ git clone https://github.com/ChenChen913/hangla.git && cd hangla && npm install 
 ## Features
 
 - **Drag to rank**: move items across tiers and reorder inside a tier
+- **Undo / redo**: Ctrl+Z / Ctrl+Shift+Z (or the arrow pair in the top bar) steps back through drags, tier edits and style changes; typing a title is coalesced into a single step instead of one step per keystroke
 - **5 preset modes**: 从夯到拉 (top-to-trash) / 经典梗图 (classic meme) / SSR 稀有度 (SSR rarity) / 竞技梯度 T0-T4 (ranked ladder T0–T4) / 经典 S ~ D (classic S–D) — tier names and colors are editable, and tiers can be added or removed
 - **4 visual styles × day/night palettes** (8 themes): 现代 (modern) / 经典梗图 (classic meme) / 抽象梗风 (abstract meme) / 赛博霓虹 (cyber neon)
 - **High-resolution PNG export**: rendered at 2× pixel ratio, file name follows `<timestamp>-<board name>-排行榜.png`, timestamped to the second
-- **Share links**: the whole board (images included) is encoded into the URL, so the recipient sees the same board and can copy it into their own editor in one click; when a board carries too many images the link gets too long and the app suggests the PNG export instead
+- **Share links**: the whole board (images included) is encoded into the URL, so the recipient sees the same board and can copy it into their own editor in one click. Images are inlined, though — **one re-encoded photo adds roughly 140k characters to the link**, far beyond what WeChat / QQ will carry, so the dialog reports the actual length and promotes the PNG download when the link is long
 - **Item pool**: a staging area for unranked items — upload a logo, add a one-line description, paste or drop images; images are re-encoded by content (photos become JPEG, illustrations with transparency stay PNG) with the longest side capped at 640px
 - **My boards**: save board snapshots in this browser, up to 30 of them; JSON export / import is available for backup
 - **Fullscreen layout**: hide the navigation bar and show nothing but the board — handy for streaming or screen recording
@@ -89,7 +90,7 @@ The output lives in `dist-web/`: fonts are not inlined but loaded as separate st
 ## Usage
 
 1. **Add items**: in the item pool, click "＋添加项目" (add item) to upload a logo and write a one-line description, or type a name and press Enter, or paste / drop an image directly
-2. **Rank**: drag item cards into any tier — they swap in real time across tiers
+2. **Rank**: drag item cards into any tier — they swap in real time across tiers; press `Ctrl+Z` (`⌘Z` on macOS) to undo and `Ctrl+Shift+Z` to redo
 3. **Edit tiers**: click a tier name to rename it, change its color, or delete it; use "＋添加档位" to add a custom tier
 4. **Change the look**: switch preset mode (从夯到拉 / 经典梗图 / SSR 稀有度 / 竞技梯度 T0-T4 / 经典 S ~ D), visual style (现代 / 经典梗图 / 抽象梗风 / 赛博霓虹) and day/night palette from the top bar (on phones these controls live in the Settings drawer at the bottom)
 5. **Display & typography**: the sliders panel controls image and name visibility, image size, tilted images (including a per-image angle), label font size / family / weight, tier label font (standard / Smiley Sans) and animation strength
@@ -156,6 +157,10 @@ hangla/
 │   ├── lib/
 │   │   ├── themes.ts         # style × day/night themes (screen + export palettes)
 │   │   ├── presets.ts        # preset modes
+│   │   ├── label.ts          # tier label paint (text color picked against the real background)
+│   │   ├── label.test.ts     # contrast tests across every preset
+│   │   ├── history.ts        # undo / redo stack (in memory, coalesces typing)
+│   │   ├── history.test.ts   # undo stack tests
 │   │   ├── images.ts         # image reading and re-encoding
 │   │   ├── exportNode.ts     # off-screen export canvas ref (shared by export / share)
 │   │   ├── drag.ts           # drag-sorting helpers
@@ -191,7 +196,7 @@ Commit conventions live in [CONTRIBUTING.md](CONTRIBUTING.md); project rules for
 It should — the export canvas and the editor share the same rendering parameters (palette, shadow, spacing, font, tilt angles are all in sync). If you do see a difference, refresh the page and try again.
 
 **A share link won't open, or reports corrupted data?**
-The link encodes the entire board including images, so a long one can be truncated by some chat apps. Download the PNG instead, or share again with fewer images.
+The link encodes the entire board including images, so a long one can be truncated by some chat apps. Do the maths: a 640px photo is about 80KB after re-encoding, which becomes a data URL and then an encoded payload — **roughly 140k characters per image**, while chat apps reliably carry a few thousand. So **if the board has any images, use the PNG download**; links are for text-only boards. The dialog shows the exact character count and switches "下载 PNG" to the primary button past 8,000 characters.
 
 **My data disappeared after switching browsers?**
 Data is stored per browser in localStorage. To move it across devices use a share link, or export important boards from "My boards".
