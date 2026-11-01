@@ -143,6 +143,9 @@ export function createBoardStorage<S = unknown>(options: BoardStorageOptions = {
       if (bytes > STORAGE_SOFT_LIMIT && !nearLimitReported) {
         nearLimitReported = true;
         onNearLimit?.(bytes);
+      } else if (bytes < STORAGE_SOFT_LIMIT) {
+        // 删掉图片降回安全线以下后重新武装：否则提示过一次就再也不提了
+        nearLimitReported = false;
       }
     } catch (error) {
       try {
