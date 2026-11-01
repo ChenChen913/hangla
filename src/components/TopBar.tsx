@@ -1,5 +1,5 @@
 import { toPng } from "html-to-image";
-import { Download, LayoutTemplate, Library, Link2, Moon, PencilLine, RotateCcw, Sun } from "lucide-react";
+import { Download, LayoutTemplate, Library, Link2, Moon, PencilLine, Redo2, RotateCcw, Sun, Undo2 } from "lucide-react";
 import { useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router";
 import { useBoard } from "../store/board";
@@ -144,6 +144,8 @@ export function TopBar() {
   const mode = useBoard(s => s.mode);
   const presetId = useBoard(s => s.presetId);
   const toggleMode = useBoard(s => s.toggleMode);
+  const past = useBoard(s => s.history.past);
+  const future = useBoard(s => s.history.future);
   const [pendingPreset, setPendingPreset] = useState<string | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
   const setShareOpen = useUi(s => s.setShareOpen);
@@ -213,6 +215,29 @@ export function TopBar() {
             </button>
 
             <DisplaySettings />
+
+            {/* 撤销 / 重做：键盘 Ctrl+Z / Ctrl+Shift+Z 也有，这里给鼠标用户一个入口 */}
+            <div className="inline-flex overflow-hidden rounded-[10px] border border-line bg-panel">
+              <button
+                onClick={() => useBoard.getState().undo()}
+                disabled={!past}
+                title="撤销（Ctrl+Z）"
+                aria-label="撤销"
+                className="inline-flex h-9 w-9 cursor-pointer items-center justify-center text-ink hover:bg-panel2 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent [&_svg]:size-4"
+              >
+                <Undo2 />
+              </button>
+              <span aria-hidden className="w-px bg-line" />
+              <button
+                onClick={() => useBoard.getState().redo()}
+                disabled={!future}
+                title="重做（Ctrl+Shift+Z）"
+                aria-label="重做"
+                className="inline-flex h-9 w-9 cursor-pointer items-center justify-center text-ink hover:bg-panel2 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent [&_svg]:size-4"
+              >
+                <Redo2 />
+              </button>
+            </div>
 
             <span className="mx-1 hidden h-[22px] w-px bg-line lg:block" />
 

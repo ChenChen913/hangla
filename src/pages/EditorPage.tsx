@@ -8,10 +8,12 @@ import {
   PanelTopClose,
   PanelTopOpen,
   Plus,
+  Redo2,
   RotateCcw,
   Share2,
   SlidersHorizontal,
   Sun,
+  Undo2,
   X,
 } from "lucide-react";
 import { useBoard } from "../store/board";
@@ -52,6 +54,8 @@ export function EditorPage() {
   const pool = useBoard(s => s.pool);
   const display = useBoard(s => s.display);
   const toggleMode = useBoard(s => s.toggleMode);
+  const past = useBoard(s => s.history.past);
+  const future = useBoard(s => s.history.future);
   // 一键全屏：隐藏顶部导航栏（直播 / 录屏时只展示排行榜本身）
   const [hideNav, setHideNav] = useState(false);
   // 移动端设置抽屉与它内部的两个确认弹窗
@@ -69,6 +73,23 @@ export function EditorPage() {
     return () => {
       exportBoardRef.current = null;
     };
+  }, []);
+
+  // Ctrl/Cmd+Z 撤销，Ctrl/Cmd+Shift+Z 或 Ctrl+Y 重做。
+  // 焦点在输入框里时让浏览器自己处理（输入框的撤销粒度更细，抢过来反而不好用）
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+      const key = e.key.toLowerCase();
+      if (key !== "z" && key !== "y") return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
+      e.preventDefault();
+      if (key === "y" || e.shiftKey) useBoard.getState().redo();
+      else useBoard.getState().undo();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   // 粘贴 / 拖入图片 → 项目库；如果拖到某个档位上，就直接进那个档位
@@ -227,6 +248,22 @@ export function EditorPage() {
               <DisplaySettingsPanel />
 
               <div className="mt-4 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => useBoard.getState().undo()}
+                  disabled={!past}
+                  className="inline-flex h-10 cursor-pointer items-center justify-center gap-1.5 rounded-[10px] border border-line bg-panel text-[13px] text-ink hover:border-accent/60 disabled:cursor-not-allowed disabled:opacity-40 [&_svg]:size-4"
+                >
+                  <Undo2 /> 撤销
+                </button>
+                <button
+                  type="button"
+                  onClick={() => useBoard.getState().redo()}
+                  disabled={!future}
+                  className="inline-flex h-10 cursor-pointer items-center justify-center gap-1.5 rounded-[10px] border border-line bg-panel text-[13px] text-ink hover:border-accent/60 disabled:cursor-not-allowed disabled:opacity-40 [&_svg]:size-4"
+                >
+                  <Redo2 /> 重做
+                </button>
                 <button
                   type="button"
                   onClick={() => setConfirmReset(true)}

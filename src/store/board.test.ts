@@ -129,3 +129,50 @@ describe("快照", () => {
     expect(state().loadSnapshot("没有这个")).toBe(false);
   });
 });
+
+describe("undo / redo", () => {
+  it("撤销把新增的档位收回去，重做再推回来", () => {
+    const before = state().tiers.length;
+    state().addTier();
+    expect(state().tiers.length).toBe(before + 1);
+
+    state().undo();
+    expect(state().tiers.length).toBe(before);
+
+    state().redo();
+    expect(state().tiers.length).toBe(before + 1);
+  });
+
+  it("跨档位拖拽能整步撤销（不会被合并窗口吃掉）", () => {
+    const [t0, t1] = state().tiers;
+    const moving = t0.items[0].id;
+
+    state().moveItem(moving, t1.id, 0);
+    expect(state().tiers[0].items.some(i => i.id === moving)).toBe(false);
+
+    state().undo();
+    expect(state().tiers[0].items.some(i => i.id === moving)).toBe(true);
+    expect(state().tiers[1].items.some(i => i.id === moving)).toBe(false);
+  });
+
+  it("撤销不回退呈现设置（字体大小不进历史）", () => {
+    state().setDisplay({ cardFontSize: 22 });
+    state().addTier();
+    state().undo();
+    expect(state().display.cardFontSize).toBe(22);
+  });
+
+  it("没有可撤销的步骤时调用 undo 不抛错", () => {
+    const snapshot = { ...state() };
+    for (let i = 0; i < 60; i++) state().undo();
+    expect(state().tiers.length).toBeGreaterThan(0);
+    expect(snapshot.title).toBe(state().title);
+  });
+
+  it("历史步数会同步到 store，供按钮置灰", () => {
+    state().addTier();
+    expect(state().history.past).toBeGreaterThan(0);
+    state().undo();
+    expect(state().history.future).toBeGreaterThan(0);
+  });
+});

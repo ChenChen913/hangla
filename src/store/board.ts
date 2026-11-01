@@ -6,6 +6,7 @@ import { presetTiers } from "../lib/presets";
 import { MODE_NAMES, STYLE_NAMES } from "../lib/themes";
 import { clamp, normalizeBoard, uid } from "../lib/utils";
 import { createBoardStorage } from "../lib/storage";
+import { boardSnapshot, createHistory, sameBoard } from "../lib/history";
 import { toast } from "./toast";
 
 const PALETTE = ["#E8934A", "#55A878", "#7D96B8", "#B583D6", "#E15D5D", "#E9B44C", "#9AA5B1"];
@@ -45,6 +46,8 @@ export function freshBoard(): Board {
 type BoardStore = Board & {
   snapshots: Snapshot[];
   display: DisplaySettings;
+  /** 撤销 / 重做可用步数（只用于按钮置灰，不进 localStorage） */
+  history: { past: number; future: number };
   setTitle(title: string): void;
   setSubtitle(subtitle: string): void;
   setStyle(style: StyleId): void;
@@ -70,6 +73,8 @@ type BoardStore = Board & {
   deleteSnapshot(id: string): void;
   loadSnapshot(id: string): boolean;
   setDisplay(patch: Partial<DisplaySettings>): void;
+  undo(): void;
+  redo(): void;
 };
 
 /** 落盘的部分（与 partialize 一一对应） */
@@ -85,11 +90,17 @@ export type PersistedBoard = {
   display: DisplaySettings;
 };
 
+/** 撤销栈只在内存里：不进 localStorage，否则历史会把图片配额一起吃光 */
+const undoStack = createHistory({ limit: 50, mergeWindow: 600 });
+/** 撤销 / 重做落状态时不要再记一条历史 */
+let restoring = false;
+
 export const useBoard = create<BoardStore>()(
   persist(
     (set, get) => ({
       ...freshBoard(),
       snapshots: [],
+      history: { past: 0, future: 0 },
       display: { showImages: true, showNames: true, tiltImages: false, tiltMax: 20, cardFont: "", cardFontSize: 15, cardFontWeight: 500, cardImageSize: 56, labelFont: "standard", labelAnim: "standard", labelFlat: false, rowGap: 12 },
 
       setTitle: title => set({ title }),
@@ -274,6 +285,28 @@ export const useBoard = create<BoardStore>()(
       },
 
       setDisplay: patch => set(s => ({ display: { ...s.display, ...patch } })),
+
+      undo: () => {
+        const prev = undoStack.undo(boardSnapshot(get()));
+        if (!prev) return;
+        restoring = true;
+        try {
+          set({ ...prev, history: undoStack.sizes() });
+        } finally {
+          restoring = false;
+        }
+      },
+
+      redo: () => {
+        const next = undoStack.redo(boardSnapshot(get()));
+        if (!next) return;
+        restoring = true;
+        try {
+          set({ ...next, history: undoStack.sizes() });
+        } finally {
+          restoring = false;
+        }
+      },
     }),
     {
       name: "hangla.v3",
@@ -330,3 +363,31 @@ export const useBoard = create<BoardStore>()(
     },
   ),
 );
+
+/**
+ * 自动记录历史：不改动任何 action，靠订阅比对「可见榜单字段」有没有变。
+ * 只影响呈现的字段（display / snapshots）不记历史，撤销不会莫名其妙地改字体大小。
+ */
+useBoard.subscribe((state, prev) => {
+  if (restoring) return;
+  const before = boardSnapshot(prev);
+  const after = boardSnapshot(state);
+  if (sameBoard(before, after)) return;
+  // 只有标题 / 副标题变了才算「可合并」的连续输入；档位、条目、风格、明暗一变就是独立一步
+  const structural =
+    before.tiers !== after.tiers ||
+    before.pool !== after.pool ||
+    before.style !== after.style ||
+    before.mode !== after.mode ||
+    before.presetId !== after.presetId;
+  undoStack.push(before, Date.now(), !structural);
+  useBoard.setState({ history: undoStack.sizes() });
+});
+
+// 刷新页面 / 跨标签页重新水合不是用户操作：清空历史，
+// 否则「撤销」会把这之后的编辑倒退回存档里没有的状态。
+useBoard.persist.onFinishHydration(() => {
+  undoStack.clear();
+  useBoard.setState({ history: undoStack.sizes() });
+});
+if (useBoard.persist.hasHydrated()) undoStack.clear();
