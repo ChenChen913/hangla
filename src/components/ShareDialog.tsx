@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { toPng } from "html-to-image";
 import { Check, Download, Link2 } from "lucide-react";
 import type { Board } from "../types";
 import { useBoard } from "../store/board";
@@ -56,12 +55,21 @@ export function ShareDialog() {
     }
     const node = exportBoardRef.current;
     if (!node) return;
-    toPng(node, { pixelRatio: 2, backgroundColor: exportPalette(style, mode).pageBg })
-      .then(url => setCardUrl(url))
+    let alive = true;
+    // 与「导出 PNG」共用按需加载的 html-to-image，首屏不背这个包
+    import("html-to-image")
+      .then(({ toPng }) => toPng(node, { pixelRatio: 2, backgroundColor: exportPalette(style, mode).pageBg }))
+      .then(url => {
+        if (alive) setCardUrl(url);
+      })
       .catch(() => {
+        if (!alive) return;
         setCardUrl(null);
         toast("分享卡片生成失败，可以直接用顶栏的「导出 PNG」", 4000);
       });
+    return () => {
+      alive = false;
+    };
   }, [open, style, mode]);
 
   async function copyLink() {

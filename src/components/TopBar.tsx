@@ -1,4 +1,3 @@
-import { toPng } from "html-to-image";
 import { Download, LayoutTemplate, Library, Link2, Moon, PencilLine, Redo2, RotateCcw, Sun, Undo2 } from "lucide-react";
 import { useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router";
@@ -123,6 +122,8 @@ export async function exportBoardPng() {
   if (!node) return;
   toast("正在生成图片…");
   try {
+    // 按需加载：html-to-image 只在导出时才需要，不能拖累首屏
+    const { toPng } = await import("html-to-image");
     const s = useBoard.getState();
     const pal = exportPalette(s.style, s.mode);
     const dataUrl = await toPng(node, { pixelRatio: 2, backgroundColor: pal.pageBg });
