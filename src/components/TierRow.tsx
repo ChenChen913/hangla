@@ -7,7 +7,8 @@ import type { StyleId } from "../lib/themes";
 import { useBoard } from "../store/board";
 import { toast } from "../store/toast";
 import { exportPalette } from "../lib/themes";
-import { itemAngle, labelTextColor, lighten, mixColors } from "../lib/utils";
+import { tierLabelPaint } from "../lib/label";
+import { itemAngle, mixColors } from "../lib/utils";
 import { cn } from "../lib/utils";
 import { ItemChip } from "./ItemChip";
 import { TierEditDialog } from "./TierEditDialog";
@@ -26,8 +27,8 @@ export const TierRow = memo(function TierRow({ tier }: { tier: Tier }) {
   const isTierStyle = style === "tier";
   // 显示设置：labelFlat 开启时也使用实体色（纯色）
   const labelFlat = isTierStyle || display.labelFlat;
-  const labelColor = labelFlat ? "#141414" : labelTextColor(tier.color);
-  const labelBg = labelFlat ? tier.color : `linear-gradient(160deg, ${lighten(tier.color)}, ${tier.color})`;
+  // 字色按「实际画出来的底」挑，不看原色（否则白字会压到近白的渐变起点上）
+  const label = tierLabelPaint(tier.color, labelFlat);
 
   // 项目拖入该档位时，标签重放一次动效（拖入 → 标签 pop 反馈）
   const prevCount = useRef(tier.items.length);
@@ -54,8 +55,8 @@ export const TierRow = memo(function TierRow({ tier }: { tier: Tier }) {
           isOver && "brightness-110",
         )}
         style={{
-          background: labelBg,
-          color: labelColor,
+          background: label.background,
+          color: label.color,
         }}
       >
         <TierLabel
@@ -140,7 +141,7 @@ export function TierRowReadonly({
 }) {
   const isTierStyle = style === "tier";
   const labelFlat = isTierStyle || display.labelFlat;
-  const labelColor = labelFlat ? "#141414" : labelTextColor(tier.color);
+  const label = tierLabelPaint(tier.color, labelFlat);
   return (
     <div
       className={cn(
@@ -151,8 +152,8 @@ export function TierRowReadonly({
       <div
         className="flex w-[104px] shrink-0 items-center justify-center px-2 py-4 text-center md:w-[168px]"
         style={{
-          background: labelFlat ? tier.color : `linear-gradient(160deg, ${lighten(tier.color)}, ${tier.color})`,
-          color: labelColor,
+          background: label.background,
+          color: label.color,
         }}
       >
         <TierLabel

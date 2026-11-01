@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { exportPalette } from "../lib/themes";
-import { itemAngle, labelTextColor, lighten, mixColors } from "../lib/utils";
+import { itemAngle, mixColors } from "../lib/utils";
+import { tierLabelPaint } from "../lib/label";
 import type { Board, DisplaySettings, Item } from "../types";
 import { useBoard } from "../store/board";
 
@@ -82,8 +83,8 @@ function ExportBoardInnerBase({ board, display }: { board: Board; display: Displ
         {board.tiers.map(t => {
           const isTierStyle = board.style === "tier";
           const labelFlat = isTierStyle || display.labelFlat;
-          const labelBg = labelFlat ? t.color : `linear-gradient(160deg, ${lighten(t.color)}, ${t.color})`;
-          const labelColor = labelFlat ? "#141414" : labelTextColor(t.color);
+          // 与编辑器共用同一份绘制规则，导出图与屏幕上看到的不许有偏差
+          const label = tierLabelPaint(t.color, labelFlat);
           return (
           <div
             key={t.id}
@@ -101,8 +102,8 @@ function ExportBoardInnerBase({ board, display }: { board: Board; display: Displ
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                background: labelBg,
-                color: labelColor,
+                background: label.background,
+                color: label.color,
                 padding: "12px",
               }}
             >

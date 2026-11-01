@@ -19,23 +19,62 @@ export function timestamp(): string {
 }
 
 /* ---------- 颜色 ---------- */
-export function parseHex(h: string) {
-  h = h.replace("#", "");
-  if (h.length === 3) h = h.split("").map(c => c + c).join("");
-  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+type Rgb = [number, number, number];
+
+/** 解析 #rgb / #rrggbb / rgb(r,g,b)：认不出来返回 null（不抛错，配色数据来自存档与分享链接） */
+export function parseColor(v: string): Rgb | null {
+  const s = v.trim();
+  if (s.startsWith("#")) {
+    let h = s.slice(1);
+    if (h.length === 3) h = h.split("").map(c => c + c).join("");
+    if (!/^[0-9a-f]{6}$/i.test(h)) return null;
+    return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+  }
+  const m = /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})/i.exec(s);
+  if (m) return [Number(m[1]), Number(m[2]), Number(m[3])];
+  return null;
 }
-/** 把 a 以 weight 比例混入 b */
+
+export function parseHex(h: string): Rgb {
+  return parseColor(h) ?? [154, 165, 177];
+}
+
+/** 把 a 以 weight 比例混入 b（weight=1 → 纯 a，0 → 纯 b） */
 export function mixColors(a: string, b: string, weight: number) {
   const [r1, g1, b1] = parseHex(a);
   const [r2, g2, b2] = parseHex(b);
   const m = (x: number, y: number) => Math.round(x * weight + y * (1 - weight));
   return `rgb(${m(r1, r2)},${m(g1, g2)},${m(b1, b2)})`;
 }
-export const lighten = (hex: string, w = 0.14) => mixColors(hex, "#ffffff", w);
-/** 依据亮度决定标签文字用深色还是白色 */
-export function labelTextColor(hex: string) {
-  const [r, g, b] = parseHex(hex);
-  return 0.299 * r + 0.587 * g + 0.114 * b > 150 ? "rgba(28,24,8,.82)" : "#ffffff";
+
+/**
+ * 与白色混合：amount=0 保留原色，amount=1 变纯白。
+ *
+ * 注意参数含义与 mixColors 相反（这里是"混入多少白"），
+ * 早前 lighten(hex, 0.14) 直接调 mixColors(hex,"#fff",0.14) 得到的其实是 86% 白，
+ * 标签渐变起点被冲成近白色，白字压上去几乎看不见（对比度 1.15:1）。
+ */
+export function mixWhite(hex: string, amount: number) {
+  return mixColors(hex, "#ffffff", 1 - amount);
+}
+
+/** WCAG 相对亮度 */
+function relativeLuminance([r, g, b]: Rgb): number {
+  const f = (v: number) => {
+    const x = v / 255;
+    return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+}
+
+/** WCAG 对比度（1 ~ 21）。任一侧解析不出来时返回 21，表示"不构成可判定的问题" */
+export function contrastRatio(fg: string, bg: string): number {
+  const a = parseColor(fg);
+  const b = parseColor(bg);
+  if (!a || !b) return 21;
+  const la = relativeLuminance(a);
+  const lb = relativeLuminance(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
 }
 
 /* ---------- 剪贴板（file:// 下自动降级） ---------- */
