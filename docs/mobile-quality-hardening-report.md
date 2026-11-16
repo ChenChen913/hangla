@@ -3,7 +3,7 @@
 > 执行日期：2026-11-16
 > 基线：`origin/main` 提交 `1fb5dbb`（本地 HEAD 与远端一致）
 > 环境：Windows 11、Node `24.18.1`、npm `11.12.1`、Google Chrome `157.0.8103.52`（headless）
-> 交付状态：**工作区改动，未提交、未部署**；`package.json` 版本仍为 `1.4.1`
+> 交付状态：已提交并推送到 GitHub `ff15f09`；GitHub Actions CI 通过，GitHub Pages 已自动部署；Cloudflare 仍是旧版本（见 §11）。
 > 原则：本报告只写实际执行过、实际量测过的内容；没有真机验证的部分在 §10 明确列出，不声称通过。
 
 ---
@@ -19,7 +19,8 @@
 | `npm run build:web` | 通过，主 JS `index-CtwJsM2z.js` 632.94 kB（gzip 205.23 kB）、CSS 47.87 kB |
 | `npm run browser:check` | **34/34 通过**，17.9s |
 | `npm run mobile:check` | **270/270 项通过，0 个阻断问题，4 条非阻断提示**；退出码 0 |
-| `npm run live:check` | **12/12 通过**，但检查的是线上旧版本（见 §11） |
+| `npm run live:check` | **12/12 通过**，但目标是 Cloudflare，线上仍是旧版本（GitHub Pages 已更新，见 §11） |
+| GitHub Actions CI | run `43863488562` 通过：`check` 14s、`build` 34s、`browser` 2m17s |
 
 移动端检查已经变成真正的失败门禁：本轮开发过程中它多次因真实问题以退出码 1 结束，
 最终才收敛到 270/270。没有删除测试、没有降低断言、没有用跳过的方式制造通过。
@@ -250,7 +251,15 @@
    → `npm run browser:check` → `npm run mobile:check`
 
 桌面与移动端检查共用同一个 Job、同一次 Chrome 安装和同一份构建产物，不重复构建。
-**限制：本轮没有 push，GitHub Actions 未实际运行；以上是本地等价命令的执行结果。**
+**限制：本轮已 push 并实际运行 GitHub Actions，CI 通过；第一次运行暴露的是测试环境差异，不是应用缺陷。**
+
+- run `43862792619`：`check` / `build` 通过，`browser` 在移动端阶段失败。
+  原因是 Linux headless Chrome 没有指针设备，桌面宽度也报告 `(hover: none)`，
+  旧断言"桌面宽度被误判为 hover:none"把它判成阻断问题。
+- 修复：该断言改为非阻断提示，并记录 `maxTouchPoints`；提交 `ff15f09`。
+- run `43863488562`：`check`、`build`、`browser` 全部通过；`browser` Job 2m17s。
+- 提示（非失败）：actions/checkout、setup-node、upload/download-artifact 仍使用 Node 20，
+  Runner 给出弃用警告；Ubuntu 26 标签迁移也有提示，均不影响本轮结果。
 
 ---
 
@@ -296,29 +305,32 @@
 
 | 项 | 实际值 |
 |---|---|
-| GitHub `main` 最新提交 | `1fb5dbb fix(export): 导出分包卡住时不再无限等待` |
-| 本地 HEAD | `1fb5dbb`（与远端一致） |
+| GitHub `main` 最新提交 | `ff15f09 fix(ci): 兼容无指针环境的悬停判定` |
+| 本地 HEAD | `ff15f09`（与远端一致） |
 | Cloudflare 最新 Production | 部署 ID `66b74539-dedc-4e28-9c05-4718cce1c33d`，源提交 `1fb5dbb`，分支 `main` |
-| Cloudflare 线上主 JS | `assets/index-S3QYH0ri.js` |
-| GitHub Pages 最近部署 | workflow run `43844280147`，`success`，提交 `1fb5dbb` |
-| GitHub Pages 线上主 JS | `assets/index-S3QYH0ri.js` |
-| 本轮工作区构建主 JS | `assets/index-CtwJsM2z.js`（632.94 kB） |
-| 结论 | 线上两站都等于 `1fb5dbb`，**不包含本轮改动**；本轮未执行部署 |
+| Cloudflare 线上主 JS | `assets/index-S3QYH0ri.js`（**旧版本**） |
+| GitHub Pages 最近部署 | workflow run `43863488475`，`success`，提交 `ff15f09` |
+| GitHub Pages 线上主 JS | `assets/index-CtwJsM2z.js`（**包含本轮改动**） |
+| 本轮构建主 JS | `assets/index-CtwJsM2z.js`（632.94 kB） |
+| 结论 | GitHub Pages 已更新；Cloudflare 仍是 `1fb5dbb`，**不包含本轮改动** |
 
-- 线上两站的产物与仓库 `1fb5dbb` 的本地构建 `index-S3QYH0ri.js` 一致，说明之前的部署是成功的。
-- `npm run live:check` 对当前线上地址 12/12 通过；它验证的是旧版本的健康度，不是本轮改动。
-- 当前具备 `wrangler` OAuth 登录（可列出部署），但本轮**没有提交、没有 push、没有部署**；
-  按任务约定，部署属于人工确认后的事项。
-- 提交并走完验收后，Cloudflare 需执行 `npm run deploy:cf`；GitHub Pages 由 push 自动发布，
-  然后重新跑 `npm run live:check` 并核对主 JS 哈希应变为 `index-CtwJsM2z.js`。
+- Cloudflare 是 Direct Upload（`wrangler pages deploy`），没有接 Git 集成，push 不会自动更新它。
+- GitHub Pages 由 `deploy-pages.yml` 在 push 后自动发布，run `43863488475` 已成功；
+  线上主 JS 已从 `index-S3QYH0ri.js` 变为 `index-CtwJsM2z.js`。
+- `npm run live:check` 默认目标是 `https://hangla-9bk.pages.dev/`（Cloudflare），
+  因此它 12/12 通过验证的仍是旧版本；GitHub Pages 备用站已跑新版本。
+- 当前具备 `wrangler` OAuth 登录（可列出部署），本轮只完成了 GitHub push 与 Pages 自动发布；
+  Cloudflare 的重新部署保留为待确认事项。
+- 需要更新 Cloudflare 时：执行 `npm run deploy:cf`，再跑 `npm run live:check`，
+  并核对主 JS 哈希应变为 `index-CtwJsM2z.js`。
 
 ---
 
 ## 12. 尚未解决的问题与已知限制
 
 1. **真机未验证**：见 §10。iOS / Android / 微信的真实行为需要在发版前人工走一遍。
-2. **CI 未实际运行**：工作流已写好，但本轮没有 push；GitHub Actions 上的 Chrome 路径、
-   Linux 字体渲染、`--headless=new` 行为尚未在真实 Runner 上验证。
+2. **CI 只在 push 上实际运行过**：run `43863488562` 已通过；`pull_request` 事件尚未触发验证。
+   第一次运行还暴露了 Linux headless 的 `hover:none` 环境差异，已改为非阻断提示。
 3. **横屏 ≥768px 仍沿用桌面密度**：844×390 下有 15 个工具栏控件为 32–38px，
    `mobile:check` 将其记为非阻断提示。这是既有产品决策（避免平板出现两套 UI），
    不是本轮新引入的问题；若要彻底解决，需要用 `pointer: coarse` 统一放大桌面工具条。
@@ -334,8 +346,11 @@
    本报告验证的是"文件损坏 / 解码失败"的恢复路径。
 9. **toast 仍可能遮住抽屉中部的文字**：本次只断言不遮挡底部保存 / 取消按钮；
    toast 容器是 `pointer-events-none`，不会拦截点击。
-10. **部署未执行**：线上仍是 `1fb5dbb`；本轮改动需要人工提交 / 部署后才会生效。
-11. **`package.json` 版本仍是 1.4.1**：本轮按工作区质量加固处理，没有擅自升版本号。
+10. **Cloudflare 未部署**：GitHub Pages 已自动更新到 `index-CtwJsM2z.js`；
+    Cloudflare 主站仍是 `1fb5dbb` / `index-S3QYH0ri.js`，需要人工执行 `npm run deploy:cf`。
+11. **`package.json` 版本仍是 1.4.1**：本轮按质量加固处理，没有擅自升版本号。
+12. **Actions 依赖的 Node 20 弃用提示**：checkout / setup-node / artifact 仍指向 Node 20，
+    Runner 给出警告但不影响结果；后续升级到 v5 / v6 即可。
 
 ---
 
@@ -349,7 +364,9 @@
 - 保存面板按设备给入口：桌面 / Android 下载，iOS 分享，微信 / QQ 只提示长按；
 - 存储图片表损坏时保留原始下标，不再把其他卡片的图片错配给当前卡片；
 - 坏图解码失败不再被当成成功上传；
-- 桌面端 34/34 回归通过，单位测试 281/281 通过。
+- 桌面端 34/34 回归通过，单位测试 281/281 通过；
+- GitHub Actions CI run `43863488562` 通过，GitHub Pages 已自动部署新版本。
 
-**没有做到的**：真机测试、CI 实际运行、线上部署。这三项已在 §10 / §11 / §12 明确列出，
-需要在提交后由人工完成，不能把本地构建成功当成线上部署成功。
+**仍未完成**：真机测试与 Cloudflare 主站部署。GitHub Pages 已随 push 更新，
+但 Cloudflare 是 Direct Upload，push 不会触发部署；需要人工执行 `npm run deploy:cf`
+并用 `npm run live:check` 核对，不能把本地构建或 GitHub Pages 发布当成 Cloudflare 已更新。
