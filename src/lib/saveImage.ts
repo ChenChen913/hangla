@@ -93,8 +93,30 @@ export function currentSaveChannel(): SaveChannel {
   });
 }
 
-/** data URL → Blob（分享卡片预览历史数据是 data URL 时用；新流程直接产 Blob） */
-export function dataUrlToBlob(dataUrl: string): Blob {
+/**
+ * 给异步任务加超时。
+ *
+ * html-to-image 是动态分包（十几 KB）。网络卡住时 `import()` 既不 resolve 也不 reject，
+ * 界面就一直停在「正在生成图片…」——用户看到的就是"点了没反应"。
+ * 截屏本身也可能因为图片过多卡在同一状态，所以两处都要有明确的上限。
+ */
+export function withTimeout<T>(task: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms);
+    task.then(
+      value => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      error => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+/** data URL → Blob（分享卡片预览历史数据是 data URL 时用；新流程直接产 Blob） */export function dataUrlToBlob(dataUrl: string): Blob {
   const comma = dataUrl.indexOf(",");
   if (comma < 0) throw new Error("不是合法的 data URL");
   const head = dataUrl.slice(0, comma);

@@ -7,6 +7,7 @@ import {
   isInAppBrowser,
   isIosLike,
   pickSaveChannel,
+  withTimeout,
 } from "./saveImage";
 
 /**
@@ -112,5 +113,22 @@ describe("文件名", () => {
     expect(exportFileName("AI/模型: 排名?", "20260101-120000")).toBe("20260101-120000-AI模型 排名-排行榜.png");
     expect(exportFileName("", "20260101-120000")).toBe("20260101-120000-从夯到拉-排行榜.png");
     expect(exportFileName("///", "20260101-120000")).toBe("20260101-120000-从夯到拉-排行榜.png");
+  });
+});
+
+describe("超时保护", () => {
+  it("任务按时完成时透传结果", async () => {
+    await expect(withTimeout(Promise.resolve(42), 50, "超时")).resolves.toBe(42);
+  });
+
+  it("任务自身报错时透传原因", async () => {
+    await expect(withTimeout(Promise.reject(new Error("网络错误")), 50, "超时")).rejects.toThrow("网络错误");
+  });
+
+  it("一直不返回时按超时失败，不会永远挂着", async () => {
+    // 模拟分包装载卡住：既不 resolve 也不 reject
+    await expect(withTimeout(new Promise<number>(() => {}), 20, "导出组件加载超时")).rejects.toThrow(
+      "导出组件加载超时",
+    );
   });
 });

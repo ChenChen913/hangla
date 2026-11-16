@@ -14,7 +14,7 @@ import { PresetSwitchDialog } from "./PresetSwitchDialog";
 import { FancySelect, type FancyOption } from "./FancySelect";
 import { DisplaySettings } from "./DisplaySettings";
 import { exportBoardRef } from "../lib/exportNode";
-import { currentSaveChannel, downloadBlob, exportFileName, exportPixelRatio } from "../lib/saveImage";
+import { currentSaveChannel, downloadBlob, exportFileName, exportPixelRatio, withTimeout } from "../lib/saveImage";
 
 const NAV = [
   { to: "/", label: "编辑器", icon: PencilLine },
@@ -123,20 +123,29 @@ export async function exportBoardPng() {
   if (!node) return;
   toast("正在生成图片…");
   try {
-    // 按需加载：html-to-image 只在导出时才需要，不能拖累首屏
-    const { toBlob } = await import("html-to-image");
+    // 按需加载：html-to-image 只在导出时才需要，不能拖累首屏。
+    // 加超时是因为分包请求卡住时 import() 会一直挂着，界面就永远停在"正在生成图片…"
+    const { toBlob } = await withTimeout(
+      import("html-to-image"),
+      15_000,
+      "导出组件加载超时，请检查网络后重试",
+    );
     const s = useBoard.getState();
     const pal = exportPalette(s.style, s.mode);
     // 画布按设备上限自适应：长榜单按 2 倍会超过 iOS 单边 4096，得到一张空白图
     const width = node.clientWidth || 1200;
     const height = node.clientHeight || 1;
-    const blob = await toBlob(node, {
-      pixelRatio: exportPixelRatio(width, height),
-      backgroundColor: pal.pageBg,
-      // 只有「艺术」档位标签用得到得意黑（1.1MB 的网络字体）。
-      // 不嵌字体时省下约 1.5MB 的 base64，手机导出明显更稳、更快；系统字体本来就能直接渲染
-      skipFonts: s.display.labelFont !== "artistic",
-    });
+    const blob = await withTimeout(
+      toBlob(node, {
+        pixelRatio: exportPixelRatio(width, height),
+        backgroundColor: pal.pageBg,
+        // 只有「艺术」档位标签用得到得意黑（1.1MB 的网络字体）。
+        // 不嵌字体时省下约 1.5MB 的 base64，手机导出明显更稳、更快；系统字体本来就能直接渲染
+        skipFonts: s.display.labelFont !== "artistic",
+      }),
+      30_000,
+      "生成图片超时，图太多太大时先删掉几张再试",
+    );
     if (!blob) throw new Error("画布生成失败，可能是图片过大");
     const filename = exportFileName(s.title, timestamp());
 
@@ -149,9 +158,12 @@ export async function exportBoardPng() {
     }
     useUi.getState().setPendingImage({ url: URL.createObjectURL(blob), blob, filename });
   } catch (err) {
-    // 手机端失败最常见的原因是位图太大（图片多 + 档位多），给出能立刻照做的建议
-    const message = (err as Error)?.message || "未知原因";
-    toast(`导出失败：${message.slice(0, 60)}。图太多太大时，先删掉几张图片再试`, 5200);
+    const raw = (err as Error)?.message || "未知原因";
+    // 两类失败给两种指引：分包装载失败是网络问题，其余多半是位图太大
+    const hint = /dynamically imported module|module script|chunk|超时/i.test(raw)
+      ? "请检查网络后重试"
+      : "图太多太大时，先删掉几张图片再试";
+    toast(`导出失败：${raw.slice(0, 60)}。${hint}`, 5200);
   }
 }
 

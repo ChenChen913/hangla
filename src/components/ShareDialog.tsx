@@ -8,7 +8,7 @@ import { exportPalette } from "../lib/themes";
 import { copyText, timestamp } from "../lib/utils";
 import { planShare, shareLengthInfo, shareLinkNotice, type SharePlan } from "../lib/share";
 import { exportBoardRef } from "../lib/exportNode";
-import { currentSaveChannel, downloadBlob, exportFileName, exportPixelRatio, shareBlob } from "../lib/saveImage";
+import { currentSaveChannel, downloadBlob, exportFileName, exportPixelRatio, shareBlob, withTimeout } from "../lib/saveImage";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./ui/dialog";
 
@@ -86,15 +86,20 @@ export function ShareDialog() {
     if (!node) return;
     let alive = true;
     let objectUrl: string | null = null;
-    // 与「导出 PNG」共用按需加载的 html-to-image，首屏不背这个包
-    import("html-to-image")
+    // 与「导出 PNG」共用按需加载的 html-to-image，首屏不背这个包；
+    // 分包装载卡住时要有明确失败，不能让预览永远停在"正在生成分享卡片…"
+    withTimeout(import("html-to-image"), 15_000, "分享卡片组件加载超时")
       .then(({ toBlob }) =>
-        toBlob(node, {
-          // 与「导出 PNG」同一套尺寸规则：长榜单降到设备能画出来的像素比
-          pixelRatio: exportPixelRatio(node.clientWidth || 1200, node.clientHeight || 1),
-          backgroundColor: exportPalette(style, mode).pageBg,
-          skipFonts: display.labelFont !== "artistic",
-        }),
+        withTimeout(
+          toBlob(node, {
+            // 与「导出 PNG」同一套尺寸规则：长榜单降到设备能画出来的像素比
+            pixelRatio: exportPixelRatio(node.clientWidth || 1200, node.clientHeight || 1),
+            backgroundColor: exportPalette(style, mode).pageBg,
+            skipFonts: display.labelFont !== "artistic",
+          }),
+          30_000,
+          "生成分享卡片超时",
+        ),
       )
       .then(blob => {
         if (!alive || !blob) return;
