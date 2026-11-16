@@ -5,7 +5,7 @@
 [![Vite](https://img.shields.io/badge/Vite-6-646CFF?logo=vite&logoColor=white)](https://vitejs.dev)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](#license)
-[![Live demo](https://img.shields.io/badge/Live_demo-online-2ea44f?logo=githubpages&logoColor=white)](https://chenchen913.github.io/hangla/)
+[![Live demo](https://img.shields.io/badge/Live_demo-Cloudflare-F38020?logo=cloudflare&logoColor=white)](https://hangla-9bk.pages.dev/)
 
 **English** | [简体中文](./README.md)
 
@@ -13,7 +13,7 @@
 
 > The line above is the canonical product description (kept verbatim in both READMEs, in `package.json` and in the GitHub About field). In English: a Tier List maker for the Chinese "from top-tier to trash" meme — drag to rank, switch visual themes and day/night palettes, export a high-resolution PNG, share in one click.
 
-**Live demo**: [chenchen913.github.io/hangla](https://chenchen913.github.io/hangla/) — no installation needed, open the web build directly
+**Live demo**: [hangla-9bk.pages.dev](https://hangla-9bk.pages.dev/) (Cloudflare Pages, primary) · [chenchen913.github.io/hangla](https://chenchen913.github.io/hangla/) (GitHub Pages, backup) — no installation needed, open the web build directly
 
 ![Exported result of "A worker's day, ranked from top-tier to trash": five tiers filled in](docs/screenshot-export.png)
 
@@ -88,6 +88,15 @@ npm run build:web
 
 The output lives in `dist-web/`: fonts are not inlined but loaded as separate static assets, so the first load is smaller. It is independent of the single-file `npm run build` output.
 
+### Hosting
+
+| Platform | URL | How it ships |
+|---|---|---|
+| Cloudflare Pages (primary) | https://hangla-9bk.pages.dev/ | `npm run deploy:cf` (Direct Upload) |
+| GitHub Pages (backup) | https://chenchen913.github.io/hangla/ | pushed to `main`, published by `deploy-pages.yml` |
+
+The Cloudflare project is named `hangla`, but its default domain carries a `-9bk` suffix — `hangla.pages.dev` belongs to an unrelated site and is **not** this app. Direct Upload does not run on git push, so rerun `npm run deploy:cf` after changes; the first run needs `npx wrangler login` or a `CLOUDFLARE_API_TOKEN` with Pages:Edit.
+
 ## Usage
 
 1. **Add items**: in the item pool, click "＋添加项目" (add item) to upload a logo and write a one-line description, or type a name and press Enter, or paste / drop an image directly
@@ -143,7 +152,8 @@ hangla/
 ├── CONTRIBUTING.md           # contribution guide
 ├── ROADMAP.md                # roadmap
 ├── THIRD-PARTY-NOTICES.md    # third-party font licence
-├── docs/                     # screenshots used by the READMEs
+├── public/                   # 404.html / _headers / og-image.png (copied as-is by the build)
+├── docs/                     # README screenshots, hardening and mobile reports
 ├── scripts/
 │   ├── check-anchors.mjs     # README anchor checker
 │   ├── check-i18n.mjs        # bilingual consistency checker

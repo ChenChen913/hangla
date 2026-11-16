@@ -1,7 +1,7 @@
 {
   "name": "hangla",
   "private": true,
-  "version": "1.4.0",
+  "version": "1.4.1",
   "type": "module",
   "license": "MIT",
   "description": "「从夯到拉」中文梗图 Tier List 排行榜生成器，支持拖拽排名、多风格昼夜切换、PNG 导出与一键分享",
@@ -12,7 +12,7 @@
     "type": "git",
     "url": "https://github.com/ChenChen913/hangla.git"
   },
-  "homepage": "https://chenchen913.github.io/hangla/",
+  "homepage": "https://hangla-9bk.pages.dev/",
   "bugs": {
     "url": "https://github.com/ChenChen913/hangla/issues"
   },
@@ -20,6 +20,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "build:web": "tsc --noEmit && vite build --mode web",
+    "deploy:cf": "npm run build:web && npx --yes wrangler@4 pages deploy dist-web --project-name hangla --branch main",
     "preview": "vite preview",
     "test": "vitest run",
     "prepare": "husky",

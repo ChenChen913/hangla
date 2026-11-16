@@ -5,13 +5,13 @@
 [![Vite](https://img.shields.io/badge/Vite-6-646CFF?logo=vite&logoColor=white)](https://vitejs.dev)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](#许可证)
-[![Live demo](https://img.shields.io/badge/Live_demo-online-2ea44f?logo=githubpages&logoColor=white)](https://chenchen913.github.io/hangla/)
+[![Live demo](https://img.shields.io/badge/Live_demo-Cloudflare-F38020?logo=cloudflare&logoColor=white)](https://hangla-9bk.pages.dev/)
 
 **简体中文** | [English](./README_EN.md)
 
 「从夯到拉」中文梗图 Tier List 排行榜生成器，支持拖拽排名、多风格昼夜切换、PNG 导出与一键分享
 
-**在线体验**：[chenchen913.github.io/hangla](https://chenchen913.github.io/hangla/) —— 无需安装，直接打开网页版
+**在线体验**：[hangla-9bk.pages.dev](https://hangla-9bk.pages.dev/)（Cloudflare Pages，主站） · [chenchen913.github.io/hangla](https://chenchen913.github.io/hangla/)（GitHub Pages，备用）—— 无需安装，直接打开网页版
 
 ![「打工人的一天·从夯到拉」导出成品：五个档位排好后的梗图](docs/screenshot-export.png)
 
@@ -86,6 +86,15 @@ npm run build:web
 
 产物在 `dist-web/`：字体不内联、作为独立静态资源按需加载，首屏更小；与 `npm run build` 的单文件离线版互不影响。
 
+### 线上部署
+
+| 平台 | 地址 | 发布方式 |
+|---|---|---|
+| Cloudflare Pages（主站） | https://hangla-9bk.pages.dev/ | `npm run deploy:cf`（Direct Upload） |
+| GitHub Pages（备用） | https://chenchen913.github.io/hangla/ | push 到 `main` 后由 `deploy-pages.yml` 自动发布 |
+
+Cloudflare 项目名是 `hangla`，但默认域名带 `-9bk` 后缀——`hangla.pages.dev` 已被别的站点占用，**不是本站**。Direct Upload 不会随 git push 自动更新，改完代码要重新执行 `npm run deploy:cf`；首次使用需先 `npx wrangler login`，或提供有 Pages:Edit 权限的 `CLOUDFLARE_API_TOKEN`。
+
 ## 用法
 
 1. **加项目**：在「项目库」点「＋添加项目」（可传 Logo、写一句话描述），或在输入框敲名称回车，也可以直接粘贴 / 拖入图片
@@ -141,7 +150,8 @@ hangla/
 ├── CONTRIBUTING.md           # 贡献指南
 ├── ROADMAP.md                # 路线图
 ├── THIRD-PARTY-NOTICES.md    # 第三方字体授权
-├── docs/                     # README 截图
+├── public/                   # 404.html / _headers / og-image.png（构建时原样复制）
+├── docs/                     # README 截图、加固与移动端报告
 ├── scripts/
 │   ├── check-anchors.mjs     # README 站内锚点自检
 │   ├── check-i18n.mjs        # 中英 README 一致性校验

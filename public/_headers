@@ -1,0 +1,13 @@
+# Cloudflare Pages 响应头
+# 只影响 Cloudflare 部署；GitHub Pages 会忽略这个文件。
+# 构建后由 Vite 从 public/ 原样复制到 dist-web/。
+
+# 带内容哈希的构建产物：可以永久缓存
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# 其余（HTML / 404 / og-image）：保持短缓存，发布后立刻生效
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: SAMEORIGIN

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="robots" content="noindex,follow" />
+    <meta name="theme-color" content="#ff6a3d" />
+    <title>页面未找到 · 夯拉榜</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f6f7f9;
+        --panel: #ffffff;
+        --line: #e4e7ed;
+        --text: #1c2026;
+        --muted: #7b8494;
+        --accent: #ff6a3d;
+        --accent2: #ffa25e;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background: var(--bg);
+        background-image: radial-gradient(900px 360px at 50% -140px, rgba(255, 106, 61, 0.12), transparent 70%);
+        background-repeat: no-repeat;
+        color: var(--text);
+        font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      main {
+        width: min(92vw, 460px);
+        padding: 28px 24px;
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        background: var(--panel);
+        box-shadow: 0 12px 40px rgba(16, 24, 40, 0.08);
+        text-align: center;
+      }
+      .logo {
+        display: inline-grid;
+        place-items: center;
+        width: 56px;
+        height: 56px;
+        border-radius: 16px;
+        background: linear-gradient(135deg, var(--accent2), var(--accent));
+        color: #fff;
+        font-size: 26px;
+        font-weight: 800;
+        box-shadow: 0 4px 16px rgba(255, 106, 61, 0.35);
+      }
+      h1 { margin: 16px 0 8px; font-size: 22px; }
+      p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.7; }
+      .actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 22px; }
+      a {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 44px;
+        padding: 0 18px;
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        color: var(--text);
+        font-size: 14px;
+        text-decoration: none;
+      }
+      a.primary {
+        border-color: transparent;
+        background: linear-gradient(135deg, var(--accent2), var(--accent));
+        color: #241304;
+        font-weight: 700;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          color-scheme: dark;
+          --bg: #0e1116; --panel: #151a21; --line: #262d38; --text: #e9ecf1; --muted: #8f99a8;
+        }
+        body { background-image: radial-gradient(900px 360px at 50% -140px, rgba(255, 122, 69, 0.10), transparent 70%); }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="logo" aria-hidden="true">夯</div>
+      <h1>页面未找到</h1>
+      <p>这个地址不存在，或者链接已经被删掉了。<br />回首页重新开始吧——你的榜单还存在本机浏览器里。</p>
+      <div class="actions">
+        <a class="primary" href="./">返回首页</a>
+        <a href="./#/templates">模板库</a>
+        <a href="./#/mine">我的排名</a>
+      </div>
+    </main>
+  </body>
+</html>

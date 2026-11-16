@@ -11,7 +11,7 @@
   "importMaxMB": 8,
   "imageMaxSide": 640,
   "storageKey": "hangla.v3",
-  "demoUrl": "https://chenchen913.github.io/hangla/",
+  "demoUrl": "https://hangla-9bk.pages.dev/",
   "scripts": [
     "dev",
     "build",
