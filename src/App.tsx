@@ -5,6 +5,7 @@ import { TopBar } from "./components/TopBar";
 import { Toaster } from "./components/Toaster";
 import { StorageNotice } from "./components/StorageNotice";
 import { ImageProgress } from "./components/ImageProgress";
+import { SaveImageDialog } from "./components/SaveImageDialog";
 import { EditorPage } from "./pages/EditorPage";
 import { applyTheme } from "./lib/themes";
 import { useBoard } from "./store/board";
@@ -85,6 +86,7 @@ function AppShell() {
         </Routes>
       </AnimatePresence>
       <ImageProgress />
+      <SaveImageDialog />
       <Toaster />
     </div>
   );

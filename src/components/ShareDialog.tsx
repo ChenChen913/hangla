@@ -8,6 +8,7 @@ import { exportPalette } from "../lib/themes";
 import { copyText, timestamp } from "../lib/utils";
 import { planShare, shareLengthInfo, shareLinkNotice, type SharePlan } from "../lib/share";
 import { exportBoardRef } from "../lib/exportNode";
+import { currentSaveChannel, downloadBlob, exportFileName, exportPixelRatio, shareBlob } from "../lib/saveImage";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./ui/dialog";
 
@@ -25,9 +26,12 @@ export function ShareDialog() {
   const tiers = useBoard(s => s.tiers);
   const pool = useBoard(s => s.pool);
   const display = useBoard(s => s.display);
-  const [cardUrl, setCardUrl] = useState<string | null>(null);
+  /** 分享卡片：Blob + object URL（用对象地址而不是几 MB 的 data URL，手机内存友好） */
+  const [card, setCard] = useState<{ url: string; blob: Blob } | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [share, setShare] = useState<ShareState>({ kind: "idle" });
+  // iOS / 微信里下载不可靠：弹窗里直接提示长按保存，别让用户以为文件已经存好了
+  const [saveChannel] = useState(currentSaveChannel);
   const notice = shareLinkNotice();
 
   // 先量长度、再决定要不要编码；大榜单分片异步编码，不卡主线程。
@@ -75,27 +79,38 @@ export function ShareDialog() {
   // 打开时生成分享卡片预览（导出节点常驻零高裁剪容器，直接截图即可）
   useEffect(() => {
     if (!open) {
-      setCardUrl(null);
+      setCard(null);
       return;
     }
     const node = exportBoardRef.current;
     if (!node) return;
     let alive = true;
+    let objectUrl: string | null = null;
     // 与「导出 PNG」共用按需加载的 html-to-image，首屏不背这个包
     import("html-to-image")
-      .then(({ toPng }) => toPng(node, { pixelRatio: 2, backgroundColor: exportPalette(style, mode).pageBg }))
-      .then(url => {
-        if (alive) setCardUrl(url);
+      .then(({ toBlob }) =>
+        toBlob(node, {
+          // 与「导出 PNG」同一套尺寸规则：长榜单降到设备能画出来的像素比
+          pixelRatio: exportPixelRatio(node.clientWidth || 1200, node.clientHeight || 1),
+          backgroundColor: exportPalette(style, mode).pageBg,
+          skipFonts: display.labelFont !== "artistic",
+        }),
+      )
+      .then(blob => {
+        if (!alive || !blob) return;
+        objectUrl = URL.createObjectURL(blob);
+        setCard({ url: objectUrl, blob });
       })
       .catch(() => {
         if (!alive) return;
-        setCardUrl(null);
+        setCard(null);
         toast("分享卡片生成失败，可以直接用顶栏的「导出 PNG」", 4000);
       });
     return () => {
       alive = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [open, style, mode]);
+  }, [open, style, mode, display.labelFont]);
 
   async function copyLink() {
     if (!plan || plan.status !== "ready" || copyDisabled) return;
@@ -109,15 +124,26 @@ export function ShareDialog() {
     if (!ok) console.log("分享链接：", plan.url);
   }
 
-  function downloadPng() {
-    if (!cardUrl) return;
-    const name = (title || "从夯到拉").replace(/[\\/:*?"<>|]/g, "").trim() || "从夯到拉";
-    const a = document.createElement("a");
-    a.href = cardUrl;
-    a.download = `${timestamp()}-${name}-排行榜.png`;
-    a.click();
-    toast("已下载 PNG，去下载目录看看");
+  /**
+   * 保存分享卡片。
+   * iOS / 内置浏览器不可能靠 `a[download]` 落盘，所以走系统分享；
+   * 连分享都没有时，弹窗里本来就摆着这张图，长按即可存进相册。
+   */
+  async function downloadPng() {
+    if (!card) return;
+    const filename = exportFileName(title, timestamp());
+    if (saveChannel === "download") {
+      downloadBlob(card.blob, filename);
+      toast("已下载 PNG，去下载目录看看");
+      return;
+    }
+    const result = await shareBlob(card.blob, filename, "排行榜图片");
+    if (result === "shared") toast("已打开系统分享，选「存储图像」即可进相册");
+    else if (result === "cancelled") toast("已取消");
+    else toast("长按上面的图片，选「存储图像 / 保存图片」即可", 5000);
   }
+
+  const saveLabel = saveChannel === "download" ? "下载 PNG" : "保存 PNG";
 
   return (
     <Dialog open={open} onOpenChange={setShareOpen}>
@@ -128,20 +154,26 @@ export function ShareDialog() {
         </DialogDescription>
 
         <div className="mt-4 max-h-[46vh] overflow-hidden rounded-xl border border-line bg-panel2">
-          {cardUrl ? (
-            <img src={cardUrl} alt="分享卡片预览" className="w-full" />
+          {card ? (
+            <img src={card.url} alt="分享卡片预览" className="w-full" />
           ) : (
             <div className="grid h-40 place-items-center text-sm text-muted">正在生成分享卡片…</div>
           )}
         </div>
+
+        {saveChannel !== "download" && card && (
+          <p className="mt-2 text-[12px] leading-relaxed text-muted">
+            长按上面的图片也能直接存进相册（iOS / 微信里最稳的一条路）。
+          </p>
+        )}
 
         {linkHint && <p className="mt-3 text-[12px] leading-relaxed text-muted">{linkHint}</p>}
 
         <div className="mt-4 flex flex-wrap justify-end gap-2">
           {/* 长链接时把「下载 PNG」放到前面：默认焦点落在真能发出去的那个按钮上 */}
           {preferPng && (
-            <Button variant="primary" disabled={!cardUrl} onClick={downloadPng}>
-              <Download /> 下载 PNG（推荐）
+            <Button variant="primary" disabled={!card} onClick={() => void downloadPng()}>
+              <Download /> {saveLabel}（推荐）
             </Button>
           )}
           <Button
@@ -153,8 +185,8 @@ export function ShareDialog() {
             {linkCopied ? <Check /> : <Link2 />} {linkCopied ? "链接已复制" : "复制链接"}
           </Button>
           {!preferPng && (
-            <Button variant="primary" disabled={!cardUrl} onClick={downloadPng}>
-              <Download /> 下载 PNG
+            <Button variant="primary" disabled={!card} onClick={() => void downloadPng()}>
+              <Download /> {saveLabel}
             </Button>
           )}
         </div>

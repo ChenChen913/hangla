@@ -7,6 +7,7 @@ import { toast } from "../store/toast";
 import { Button } from "../components/ui/button";
 import { ConfirmDialog } from "../components/ui/dialog";
 import { BOARD_LIMITS, timestamp } from "../lib/utils";
+import { currentSaveChannel, downloadBlob, shareBlob } from "../lib/saveImage";
 
 export function MinePage() {
   const navigate = useNavigate();
@@ -32,16 +33,23 @@ export function MinePage() {
   function exportJson() {
     const board = currentBoard();
     const blob = new Blob([JSON.stringify(board, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `hangla-board-${timestamp()}.json`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    // 立刻 revoke 在部分浏览器会取消下载，留一点缓冲
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    toast("已导出榜单 JSON");
+    const filename = `hangla-board-${timestamp()}.json`;
+    // 与 PNG 导出同一套平台判断：iOS 的 a[download] 不可靠，改走系统分享（存到「文件」）
+    if (currentSaveChannel() === "download") {
+      downloadBlob(blob, filename);
+      toast("已导出榜单 JSON");
+      return;
+    }
+    void shareBlob(blob, filename, "榜单 JSON").then(result => {
+      if (result === "shared") {
+        toast("已打开系统分享，存到「文件」即可");
+        return;
+      }
+      if (result === "cancelled") return;
+      // 内置浏览器没有系统分享：再试一次下载，成不成至少给了明确反馈
+      downloadBlob(blob, filename);
+      toast("已开始下载，去「文件 / 下载」里看看", 4000);
+    });
   }
 
   async function importJson(file: File) {

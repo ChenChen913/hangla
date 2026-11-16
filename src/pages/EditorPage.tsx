@@ -273,7 +273,11 @@ export function EditorPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => void exportBoardPng()}
+                  onClick={() => {
+                    // 先收起抽屉：导出结束要弹「保存图片」面板，两层弹窗叠着会抢焦点
+                    setSettingsOpen(false);
+                    void exportBoardPng();
+                  }}
                   className="inline-flex h-11 cursor-pointer items-center justify-center gap-1.5 rounded-[10px] border border-transparent bg-gradient-to-br from-accent2 to-accent text-[13px] font-semibold text-white shadow-[0_2px_14px_rgba(255,106,61,.3)] hover:brightness-105 md:h-10 [&_svg]:size-4"
                 >
                   <Download /> 导出 PNG

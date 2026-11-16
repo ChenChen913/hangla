@@ -544,6 +544,48 @@ try {
     await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape" });
     await sleep(300);
 
+    /* ---------- iPhone：导出不能"点了没反应" ---------- */
+    // iOS Safari 在 await 之后的 a.click() 会被静默拦截，微信内置浏览器直接忽略 download。
+    // 所以 iPhone UA 下必须弹「保存图片」面板，而不是提示"已导出"却什么都不发生。
+    const IPHONE_UA =
+      "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
+    await send("Emulation.setUserAgentOverride", { userAgent: IPHONE_UA, platform: "iPhone" });
+    await send("Page.navigate", { url: `http://127.0.0.1:${PORT}/#/` });
+    await waitFor(`!!document.querySelector('textarea[placeholder^="点此给榜单"]')`, 9000);
+    await sleep(350);
+    await tapButton("设置");
+    await sleep(400);
+    const pngBeforeIos = new Set(readdirSync(downloads).filter(f => f.toLowerCase().endsWith(".png")));
+    check("iPhone：点「导出 PNG」", await tapButton("导出 PNG"));
+    const saveSheetReady = await waitFor(
+      `(() => {
+        const d = ${TOP_DIALOG};
+        return !!d && !!d.querySelector('img[alt="排行榜图片"]');
+      })()`,
+      15000,
+    );
+    check("iPhone：导出后弹出保存面板（不再静默失败）", saveSheetReady);
+    check(
+      "iPhone：保存面板给出长按保存的说明",
+      await evaluate(`(() => { const d = ${TOP_DIALOG}; return !!d && d.innerText.includes("长按"); })()`),
+    );
+    if (saveSheetReady) {
+      await tapButton("直接下载", true);
+      let iosPng = null;
+      for (let i = 0; i < 40; i++) {
+        await sleep(250);
+        iosPng = readdirSync(downloads).find(
+          f => f.toLowerCase().endsWith(".png") && !pngBeforeIos.has(f),
+        );
+        if (iosPng) break;
+      }
+      check("iPhone：面板里的「直接下载」能落盘", !!iosPng, iosPng ?? "没有新文件");
+      await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape" });
+      await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape" });
+      await sleep(300);
+    }
+    await send("Emulation.setUserAgentOverride", { userAgent: "" });
+
     /* ---------- 深度检查：风格 / 长文本 / 320px 抽屉 / 我的排名 ---------- */
     const readState = () => evaluate(`(() => {
       const raw = localStorage.getItem("hangla.v3");

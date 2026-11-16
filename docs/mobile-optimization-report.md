@@ -276,3 +276,68 @@
 - 44 项触屏交互断言全部通过，包含跨档拖拽、换位、删除、上传、分享、PNG / JSON 导出导入、8 套主题。
 - 桌面端 34 项真实浏览器回归全部通过，布局与交互未退化。
 - 真机（iOS Safari / Android Chrome）尚未验证，已在 §8 / §9 明确列出，不声称已完成。
+
+---
+
+## 11. v1.4.1 补记：导出 PNG 在真机上的两个坑
+
+> 这一节是上线后收到的真实反馈（"电脑端能导出，手机上点了没反应"）的根因记录。
+> 它同时说明 §8 的结论为什么重要：**同一段代码在 Chromium 移动模拟层里是通的**，
+> `npm run mobile:check` 的"PNG 落盘"断言当时也是绿的。
+
+### 11.1 症状
+
+手机点「导出 PNG」后，界面提示"已导出 PNG，去下载目录看看"，但相册、「文件」、下载目录里都没有图；
+微信里打开则完全没有任何反馈。
+
+### 11.2 根因一：iOS / 内置浏览器不接受程序化下载
+
+原实现：
+
+```ts
+const dataUrl = await toPng(node, { pixelRatio: 2 });
+const a = document.createElement("a");
+a.href = dataUrl;
+a.download = `${timestamp()}-${name}-排行榜.png`;
+a.click();               // 游离节点 + data URL，且在 await 之后
+```
+
+- **iOS Safari**：`await` 已经用掉了用户手势（transient activation），之后对游离 `<a>` 的 `click()`
+  会被静默拦截；`data:` URL 的 `download` 本身也不可靠。
+- **微信 / QQ / 微博等内置浏览器**（WKWebView / X5）：`download` 属性被忽略，点了什么都不发生。
+
+两者都不会抛错，所以代码照常走到 `toast("已导出 PNG")`——这就是"假成功"。
+
+### 11.3 根因二：长榜单超过 iOS 画布上限
+
+固定 2 倍像素比时，导出画布 1200px 宽、27 个档位高度 2892px，生成 **2400×5784** 的位图。
+iOS 的画布上限是单边 4096、面积约 16.7M 像素，超限时得到的是空白图或下半截被裁掉的图。
+（实测：默认 5 档 → 2400×1384 正常；27 档 → 直接越界。）
+
+### 11.4 修复
+
+| 措施 | 位置 |
+|---|---|
+| 按设备能力分通道：桌面 / Android 直接下载，iOS 与内置浏览器先出保存面板 | `src/lib/saveImage.ts` `pickSaveChannel()` |
+| 下载一律用 Blob + 真实挂载到文档里的 `<a>`，不再用 data URL | `downloadBlob()` |
+| 保存面板提供「保存 / 分享」（系统分享，可存相册）与「直接下载」，并提示可长按保存 | `src/components/SaveImageDialog.tsx` |
+| 像素比按单边 4096 / 面积 16M 自适应，向下取整避免 4096 顶成 4106 | `exportPixelRatio()` |
+| 非「艺术」档位标签时 `skipFonts`，省掉 1.1MB 字体的 base64 | `exportBoardPng()` |
+| 分享弹窗预览改用 Blob 对象地址，下载同源分流 | `ShareDialog.tsx` |
+| 移动端导出前先收起设置抽屉，避免两层弹窗抢焦点 | `EditorPage.tsx` |
+
+### 11.5 验证
+
+- `src/lib/saveImage.test.ts`：13 例，钉住 iPhone / iPadOS 桌面 UA / 微信 / Android / 桌面 的通道判定，
+  以及 1200×780、1200×2892、1200×8000 等尺寸不越界。
+- `npm run mobile:check`：新增 iPhone UA 用例——点「导出 PNG」必须弹出带图片的保存面板，
+  面板里点「直接下载」仍能落盘。
+- 实测同一份 27 档榜单：修复前 2400×5784（越界），修复后 1692×4077（安全），体积 2.31MB → 1.31MB。
+- 桌面端普通榜单仍输出 2400px 宽，画质未降。
+
+### 11.6 仍然存在的限制
+
+- iPhone / Android 真机仍未实测；`navigator.share` 是否真的调起系统面板取决于设备与系统版本，
+  失败时会回落到"长按图片保存"的提示，这条路任何手机浏览器都支持。
+- 保存面板里的「保存 / 分享」在桌面 Chrome 上不可用（`canShare({files})` 为 false），
+  桌面本来就走直接下载，不会看到这个面板。

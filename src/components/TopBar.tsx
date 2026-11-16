@@ -14,6 +14,7 @@ import { PresetSwitchDialog } from "./PresetSwitchDialog";
 import { FancySelect, type FancyOption } from "./FancySelect";
 import { DisplaySettings } from "./DisplaySettings";
 import { exportBoardRef } from "../lib/exportNode";
+import { currentSaveChannel, downloadBlob, exportFileName, exportPixelRatio } from "../lib/saveImage";
 
 const NAV = [
   { to: "/", label: "编辑器", icon: PencilLine },
@@ -116,25 +117,41 @@ export function requestPresetChange(id: string, onNeedConfirm: (id: string) => v
   }
 }
 
-/** 截图屏幕外导出画布并下载 PNG（顶栏「导出 PNG」与移动端设置抽屉共用） */
+/** 截图屏幕外导出画布（顶栏「导出 PNG」与移动端设置抽屉共用） */
 export async function exportBoardPng() {
   const node = exportBoardRef.current;
   if (!node) return;
   toast("正在生成图片…");
   try {
     // 按需加载：html-to-image 只在导出时才需要，不能拖累首屏
-    const { toPng } = await import("html-to-image");
+    const { toBlob } = await import("html-to-image");
     const s = useBoard.getState();
     const pal = exportPalette(s.style, s.mode);
-    const dataUrl = await toPng(node, { pixelRatio: 2, backgroundColor: pal.pageBg });
-    const name = (s.title || "从夯到拉").replace(/[\\/:*?"<>|]/g, "").trim() || "从夯到拉";
-    const a = document.createElement("a");
-    a.href = dataUrl;
-    a.download = `${timestamp()}-${name}-排行榜.png`;
-    a.click();
-    toast("已导出 PNG，去下载目录看看");
+    // 画布按设备上限自适应：长榜单按 2 倍会超过 iOS 单边 4096，得到一张空白图
+    const width = node.clientWidth || 1200;
+    const height = node.clientHeight || 1;
+    const blob = await toBlob(node, {
+      pixelRatio: exportPixelRatio(width, height),
+      backgroundColor: pal.pageBg,
+      // 只有「艺术」档位标签用得到得意黑（1.1MB 的网络字体）。
+      // 不嵌字体时省下约 1.5MB 的 base64，手机导出明显更稳、更快；系统字体本来就能直接渲染
+      skipFonts: s.display.labelFont !== "artistic",
+    });
+    if (!blob) throw new Error("画布生成失败，可能是图片过大");
+    const filename = exportFileName(s.title, timestamp());
+
+    // 桌面 / Android 浏览器直接下载；iOS 与微信等内置浏览器改成先出预览面板。
+    // （原因见 lib/saveImage.ts 顶部注释：await 之后 a.click() 在 iOS 会被静默拦截）
+    if (currentSaveChannel() === "download") {
+      downloadBlob(blob, filename);
+      toast("已导出 PNG，去下载目录看看");
+      return;
+    }
+    useUi.getState().setPendingImage({ url: URL.createObjectURL(blob), blob, filename });
   } catch (err) {
-    toast("导出失败：" + (err as Error).message);
+    // 手机端失败最常见的原因是位图太大（图片多 + 档位多），给出能立刻照做的建议
+    const message = (err as Error)?.message || "未知原因";
+    toast(`导出失败：${message.slice(0, 60)}。图太多太大时，先删掉几张图片再试`, 5200);
   }
 }
 
