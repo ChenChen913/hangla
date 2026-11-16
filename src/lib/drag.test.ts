@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { freshBoard, useBoard } from "../store/board";
-import { resolveDropIndex } from "./drag";
+import { locateItem, resolveDropIndex } from "./drag";
 
 const state = () => useBoard.getState();
 
@@ -48,5 +48,25 @@ describe("resolveDropIndex", () => {
     const ids = ["a", "b"];
     expect(resolveDropIndex(ids, "x", "a")).toBe(2);
     expect(resolveDropIndex(ids, "a", "x")).toBe(2);
+  });
+});
+
+describe("locateItem", () => {
+  const board = {
+    tiers: [
+      { id: "t0", items: [{ id: "a" }, { id: "b" }] },
+      { id: "t1", items: [{ id: "c" }] },
+    ],
+    pool: [{ id: "p" }],
+  };
+
+  it("找到条目的容器、下标与档位下标", () => {
+    expect(locateItem(board, "b")).toEqual({ container: "t0", index: 1, tierIndex: 0 });
+    expect(locateItem(board, "c")).toEqual({ container: "t1", index: 0, tierIndex: 1 });
+    expect(locateItem(board, "p")).toEqual({ container: "pool", index: 0, tierIndex: null });
+  });
+
+  it("不存在的 id 返回 null", () => {
+    expect(locateItem(board, "没有")).toBeNull();
   });
 });

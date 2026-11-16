@@ -3,6 +3,8 @@ import { AnimatePresence, motion } from "motion/react";
 import { HashRouter, Navigate, Route, Routes, useLocation } from "react-router";
 import { TopBar } from "./components/TopBar";
 import { Toaster } from "./components/Toaster";
+import { StorageNotice } from "./components/StorageNotice";
+import { ImageProgress } from "./components/ImageProgress";
 import { EditorPage } from "./pages/EditorPage";
 import { applyTheme } from "./lib/themes";
 import { useBoard } from "./store/board";
@@ -37,8 +39,33 @@ function AppShell() {
   const mode = useBoard(s => s.mode);
   useEffect(() => applyTheme(style as never, mode as never), [style, mode]);
 
+  // 软键盘：iOS 不会收缩布局视口，只缩小 visualViewport。
+  // 把差值写进 --kb-inset，底部抽屉据此整体抬高；同时标记 data-kb，
+  // 让编辑器的固定底栏在打字时让位（否则 Android 上它会顶到输入框上方）。
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const apply = () => {
+      // 双指缩放（vv.scale > 1）会让 vv.height 变小，那不是键盘，不能据此抬升抽屉
+      const inset =
+        vv.scale > 1.05 ? 0 : Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      document.documentElement.style.setProperty("--kb-inset", `${inset}px`);
+      document.documentElement.dataset.kb = inset > 80 ? "1" : "0";
+    };
+    apply();
+    vv.addEventListener("resize", apply);
+    vv.addEventListener("scroll", apply);
+    return () => {
+      vv.removeEventListener("resize", apply);
+      vv.removeEventListener("scroll", apply);
+      document.documentElement.style.removeProperty("--kb-inset");
+      delete document.documentElement.dataset.kb;
+    };
+  }, []);
+
   return (
     <div className="min-h-screen">
+      <StorageNotice />
       <TopBar />
       <AnimatePresence mode="wait">
         <Routes location={location} key={location.pathname}>
@@ -57,6 +84,7 @@ function AppShell() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AnimatePresence>
+      <ImageProgress />
       <Toaster />
     </div>
   );

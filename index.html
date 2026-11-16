@@ -2,7 +2,12 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover 让 env(safe-area-inset-*) 在刘海屏 / 圆角屏上生效；
+         interactive-widget=resizes-content 让 Android Chrome 在软键盘弹出时收缩布局视口 -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
+    />
     <meta name="description" content="「从夯到拉」中文梗图 Tier List 排行榜生成器，支持拖拽排名、多风格昼夜切换、PNG 导出与一键分享" />
     <meta name="theme-color" content="#ff7a45" />
     <meta property="og:title" content="夯拉榜 · 从夯到拉排行榜生成器" />

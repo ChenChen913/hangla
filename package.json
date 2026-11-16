@@ -1,7 +1,7 @@
 {
   "name": "hangla",
   "private": true,
-  "version": "1.2.1",
+  "version": "1.4.0",
   "type": "module",
   "license": "MIT",
   "description": "「从夯到拉」中文梗图 Tier List 排行榜生成器，支持拖拽排名、多风格昼夜切换、PNG 导出与一键分享",
@@ -23,7 +23,9 @@
     "preview": "vite preview",
     "test": "vitest run",
     "prepare": "husky",
-    "docs:check": "node scripts/check-anchors.mjs README.md README_EN.md && node scripts/check-i18n.mjs"
+    "docs:check": "node scripts/check-anchors.mjs README.md README_EN.md && node scripts/check-i18n.mjs && node scripts/check-facts.mjs",
+    "browser:check": "node scripts/browser-check.mjs",
+    "mobile:check": "node scripts/mobile-check.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

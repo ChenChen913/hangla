@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, Download, Link2 } from "lucide-react";
 import type { Board } from "../types";
 import { useBoard } from "../store/board";
@@ -6,10 +6,12 @@ import { useUi } from "../store/ui";
 import { toast } from "../store/toast";
 import { exportPalette } from "../lib/themes";
 import { copyText, timestamp } from "../lib/utils";
-import { shareLengthInfo, buildShareUrl, shareLinkNotice } from "../lib/share";
+import { planShare, shareLengthInfo, shareLinkNotice, type SharePlan } from "../lib/share";
 import { exportBoardRef } from "../lib/exportNode";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./ui/dialog";
+
+type ShareState = { kind: "idle" } | { kind: "pending" } | { kind: "error" } | { kind: "plan"; plan: SharePlan };
 
 /** 分享弹窗：分享卡片预览 + 复制链接 + 下载 PNG */
 export function ShareDialog() {
@@ -22,35 +24,58 @@ export function ShareDialog() {
   const presetId = useBoard(s => s.presetId);
   const tiers = useBoard(s => s.tiers);
   const pool = useBoard(s => s.pool);
+  const display = useBoard(s => s.display);
   const [cardUrl, setCardUrl] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [share, setShare] = useState<ShareState>({ kind: "idle" });
   const notice = shareLinkNotice();
 
-  // 分享链接只在弹窗打开且榜单变化时编码一次：encodeBoard 对大榜单是同步重活，
-  // 不能每次点「复制链接」都重新算一遍
-  const shareUrl = useMemo(() => {
-    if (!open) return "";
+  // 先量长度、再决定要不要编码；大榜单分片异步编码，不卡主线程。
+  // 依赖里包含 display：显示设置现在随分享走，改了设置要重新编码。
+  useEffect(() => {
+    if (!open) {
+      setShare({ kind: "idle" });
+      setLinkCopied(false);
+      return;
+    }
+    let alive = true;
+    setShare({ kind: "pending" });
     const board: Board = { title, subtitle, style, mode, presetId, tiers, pool };
-    return buildShareUrl(board);
-  }, [open, title, subtitle, style, mode, presetId, tiers, pool]);
+    planShare(board, display)
+      .then(plan => {
+        if (alive) setShare({ kind: "plan", plan });
+      })
+      .catch(() => {
+        if (alive) setShare({ kind: "error" });
+      });
+    return () => {
+      alive = false;
+    };
+  }, [open, title, subtitle, style, mode, presetId, tiers, pool, display]);
 
-  const length = shareLengthInfo(shareUrl);
+  const plan = share.kind === "plan" ? share.plan : null;
+  const info = plan ? shareLengthInfo(plan.chars) : null;
   // 硬上限时复制按钮直接禁用：超长 URL 在多数聊天软件里必被截断，改用 PNG 才不会白发
-  const copyDisabled = notice.disabled || length.state === "over";
+  const copyDisabled = notice.disabled || share.kind !== "plan" || !plan || plan.status === "over";
   // 含图榜单编进链接基本都超过聊天软件能收的长度，这里如实报数，并把 PNG 提为主操作
   const linkHint =
-    length.state === "over"
-      ? `链接 ${length.kb}KB（${length.chars.toLocaleString()} 字符），已超过长度上限，复制出去一定被截断——请用「下载 PNG」。`
-      : length.state === "long"
-        ? `链接 ${length.kb}KB（${length.chars.toLocaleString()} 字符），微信 / QQ 里多半会被截断。发图更稳：用「下载 PNG」。`
-        : notice.hint;
-  const preferPng = length.state !== "ok" || notice.disabled;
+    share.kind === "pending" || share.kind === "idle"
+      ? "正在估算链接长度…"
+      : share.kind === "error"
+        ? "分享链接生成失败，请改用「下载 PNG」。"
+        : plan?.status === "over"
+          ? `链接约 ${plan.kb}KB（${plan.chars.toLocaleString()} 字符），已超过长度上限——${
+              plan.estimated ? "按数据体量估算" : "已精确计算"
+            }，复制出去一定被截断，请用「下载 PNG」。`
+          : info && info.state === "long"
+            ? `链接 ${info.kb}KB（${info.chars.toLocaleString()} 字符），微信 / QQ 里多半会被截断。发图更稳：用「下载 PNG」。`
+            : notice.hint;
+  const preferPng = notice.disabled || !plan || plan.status === "over" || info?.state !== "ok";
 
   // 打开时生成分享卡片预览（导出节点常驻零高裁剪容器，直接截图即可）
   useEffect(() => {
     if (!open) {
       setCardUrl(null);
-      setLinkCopied(false);
       return;
     }
     const node = exportBoardRef.current;
@@ -73,15 +98,15 @@ export function ShareDialog() {
   }, [open, style, mode]);
 
   async function copyLink() {
-    if (!shareUrl || copyDisabled) return;
-    if (length.state === "long") {
+    if (!plan || plan.status !== "ready" || copyDisabled) return;
+    if (plan.state === "long") {
       toast("链接偏长，部分聊天软件会截断——建议改用「下载 PNG」", 5000);
     }
-    const ok = await copyText(shareUrl);
+    const ok = await copyText(plan.url);
     setLinkCopied(ok);
     // 复制失败时把链接打到控制台，作为最后一条兜底通道（弹窗里也提示了）
     toast(ok ? "分享链接已复制" : "复制失败，链接已打印到浏览器控制台", 4000);
-    if (!ok) console.log("分享链接：", shareUrl);
+    if (!ok) console.log("分享链接：", plan.url);
   }
 
   function downloadPng() {
@@ -98,7 +123,9 @@ export function ShareDialog() {
     <Dialog open={open} onOpenChange={setShareOpen}>
       <DialogContent className="w-[min(92vw,560px)]">
         <DialogTitle>分享你的排名</DialogTitle>
-        <DialogDescription>复制链接给朋友看可交互版本，或下载图片直接发群 / 朋友圈 / 小红书。</DialogDescription>
+        <DialogDescription>
+          复制链接给朋友看可交互版本（会带上你的显示设置），或下载图片直接发群 / 朋友圈 / 小红书。
+        </DialogDescription>
 
         <div className="mt-4 max-h-[46vh] overflow-hidden rounded-xl border border-line bg-panel2">
           {cardUrl ? (

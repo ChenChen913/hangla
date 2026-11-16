@@ -1,21 +1,28 @@
 import { useEffect, useState } from "react";
-import { Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import type { Tier } from "../types";
+import { BOARD_LIMITS } from "../lib/utils";
 import { useBoard } from "../store/board";
 import { toast } from "../store/toast";
 import { Button } from "./ui/button";
 import { ConfirmDialog, Dialog, DialogContent, DialogDescription, DialogTitle } from "./ui/dialog";
 
-/** 档位编辑弹窗：名称 + 颜色，以及删除档位 */
+/**
+ * 档位编辑弹窗：名称 + 颜色 + 顺序，以及删除档位。
+ * 顺序按钮是触屏用户的备用路径（桌面也可以直接点档位行右上角的上移/下移）。
+ */
 export function TierEditDialog({ tier, onClose }: { tier: Tier | null; onClose(): void }) {
   const [name, setName] = useState("");
   const [color, setColor] = useState("#9AA5B1");
   const [confirmDel, setConfirmDel] = useState(false);
+  const tiers = useBoard(s => s.tiers);
+  const index = tier ? tiers.findIndex(t => t.id === tier.id) : -1;
 
   useEffect(() => {
     if (tier) {
       setName(tier.name);
       setColor(tier.color);
+      setConfirmDel(false);
     }
   }, [tier]);
 
@@ -49,7 +56,8 @@ export function TierEditDialog({ tier, onClose }: { tier: Tier | null; onClose()
               onChange={e => setName(e.target.value)}
               onKeyDown={e => e.key === "Enter" && save()}
               placeholder="档位名称（如：夯）"
-              className="w-full rounded-[10px] border border-line bg-panel2 px-3 py-2 text-sm text-ink outline-none focus:border-accent"
+              maxLength={BOARD_LIMITS.tierName}
+              className="w-full rounded-[10px] border border-line bg-panel2 px-3 py-2.5 text-[16px] text-ink outline-none focus:border-accent md:py-2 md:text-sm"
             />
           </div>
           <div className="mt-3.5 flex items-center gap-3">
@@ -58,11 +66,44 @@ export function TierEditDialog({ tier, onClose }: { tier: Tier | null; onClose()
               type="color"
               value={color}
               onChange={e => setColor(e.target.value)}
-              className="h-9 w-16 cursor-pointer rounded-lg border border-line bg-transparent p-1"
+              className="h-10 w-16 cursor-pointer rounded-lg border border-line bg-transparent p-1"
             />
           </div>
 
-          <div className="mt-5 flex items-center justify-between">
+          <div className="mt-3.5 rounded-xl border border-line p-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[13px] font-medium text-ink">顺序</span>
+              <span className="text-[11px] text-muted">
+                {index >= 0 ? `第 ${index + 1} / ${tiers.length} 档` : ""}
+              </span>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <Button
+                variant="default"
+                disabled={index <= 0}
+                onClick={() => {
+                  if (!tier) return;
+                  useBoard.getState().moveTier(tier.id, -1);
+                  toast("档位已上移");
+                }}
+              >
+                <ChevronUp /> 上移
+              </Button>
+              <Button
+                variant="default"
+                disabled={index < 0 || index >= tiers.length - 1}
+                onClick={() => {
+                  if (!tier) return;
+                  useBoard.getState().moveTier(tier.id, 1);
+                  toast("档位已下移");
+                }}
+              >
+                <ChevronDown /> 下移
+              </Button>
+            </div>
+          </div>
+
+          <div className="sticky bottom-0 -mx-4 mt-5 flex items-center justify-between gap-2 border-t border-line bg-panel px-4 pb-1 pt-3 md:-mx-5 md:px-5">
             <Button
               variant="ghost"
               className="text-danger hover:bg-danger/10 hover:text-danger"
@@ -93,6 +134,7 @@ export function TierEditDialog({ tier, onClose }: { tier: Tier | null; onClose()
           if (!tier) return;
           useBoard.getState().deleteTier(tier.id);
           toast("档位已删除，项目移回项目库");
+          setConfirmDel(false);
           onClose();
         }}
       />

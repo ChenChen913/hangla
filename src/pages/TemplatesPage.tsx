@@ -24,7 +24,7 @@ export function TemplatesPage() {
   }
 
   return (
-    <div className="mx-auto max-w-[1120px] px-5 pb-20 pt-10">
+    <div className="mx-auto max-w-[1120px] px-4 pb-16 pt-6 md:px-5 md:pb-20 md:pt-10">
       <div className="mb-8 text-center">
         <h1 className="inline-flex items-center gap-2 text-2xl font-extrabold">
           <LayoutTemplate className="size-6 text-accent" /> 模板库

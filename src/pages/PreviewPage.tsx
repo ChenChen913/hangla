@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { PencilLine } from "lucide-react";
 import type { Board } from "../types";
-import { decodeBoard } from "../lib/utils";
+import { decodeSharedBoard } from "../lib/utils";
 import { TIER_PRESETS } from "../lib/presets";
 import { applyTheme, exportPalette } from "../lib/themes";
 import { useBoard } from "../store/board";
@@ -30,16 +30,23 @@ export function PreviewPage() {
   const [overwriteOpen, setOverwriteOpen] = useState(false);
 
   // 分享链接数据只解码一次：data 不变就不重复 atob + JSON.parse（图片多时解码很贵）
-  const shared = useMemo(() => (!snapId && data ? decodeBoard(data) : null), [snapId, data]);
+  const shared = useMemo(() => (!snapId && data ? decodeSharedBoard(data) : null), [snapId, data]);
   // 快照预览走内存里的 snapshots，不再把整份榜单 encode 进 URL
   const snap = useMemo(
     () => (snapId ? snapshots.find(s => s.id === snapId) ?? null : null),
     [snapId, snapshots],
   );
   const snapBoard = snap?.board;
+  const sharedBoard = shared?.board;
 
-  const viewStyle = snapBoard?.style ?? shared?.style;
-  const viewMode = snapBoard?.mode ?? shared?.mode;
+  const viewStyle = snapBoard?.style ?? sharedBoard?.style;
+  const viewMode = snapBoard?.mode ?? sharedBoard?.mode;
+  /**
+   * 显示设置的优先级：
+   * 快照自己的（保存那一刻） → 分享数据里的（分享者那一刻） → 本机全局设置（旧链接 / 预览当前榜单）。
+   * 这样「预览看到的」和「恢复 / 复制后编辑器里的」是同一套参数。
+   */
+  const viewDisplay = snap?.display ?? shared?.display ?? display;
 
   // 分享链接 / 快照要按"分享者那套主题"渲染，而不是打开者本机的主题；
   // 离开这个页面再还原成本机主题
@@ -73,7 +80,7 @@ export function PreviewPage() {
     );
   }
 
-  const board: Board = snapBoard ?? shared ?? {
+  const board: Board = snapBoard ?? sharedBoard ?? {
     title: storeTitle,
     subtitle: storeSubtitle,
     style: storeStyle,
@@ -88,8 +95,11 @@ export function PreviewPage() {
 
   function applyShared() {
     if (!shared) return;
-    useBoard.getState().importBoard(shared);
-    toast("已复制到编辑器，可以开始改了");
+    useBoard.getState().importBoard(shared.board);
+    // 分享链接带着分享者的显示设置：复制过来要连"长什么样"一起复制，
+    // 否则预览（分享者视角）和刚复制的编辑器（本机视角）会立刻不一致
+    if (shared.display) useBoard.getState().setDisplay(shared.display);
+    toast(shared.display ? "已复制到编辑器，显示设置也按分享内容应用" : "已复制到编辑器，可以开始改了");
     setCopied(true);
     navigate("/");
   }
@@ -107,7 +117,7 @@ export function PreviewPage() {
   }
 
   return (
-    <div className="mx-auto max-w-[1120px] px-4 pb-24 pt-12 md:px-5">
+    <div className="mx-auto max-w-[1120px] px-4 pb-[calc(80px+env(safe-area-inset-bottom))] pt-8 md:px-5 md:pb-24 md:pt-12">
       <div className="mb-8 text-center">
         <div className="flex flex-wrap items-center justify-center gap-3">
           <h1 className="text-3xl font-extrabold md:text-4xl">{board.title || "从夯到拉"}</h1>
@@ -121,9 +131,9 @@ export function PreviewPage() {
         </p>
       </div>
 
-      <div className="flex flex-col" style={{ gap: display.rowGap }}>
+      <div className="flex flex-col" style={{ gap: viewDisplay.rowGap }}>
         {board.tiers.map(t => (
-          <TierRowReadonly key={t.id} tier={t} style={board.style} panel={pal.panel} display={display} />
+          <TierRowReadonly key={t.id} tier={t} style={board.style} panel={pal.panel} display={viewDisplay} />
         ))}
       </div>
 
@@ -156,7 +166,11 @@ export function PreviewPage() {
         open={overwriteOpen}
         onOpenChange={setOverwriteOpen}
         title="覆盖当前编辑器里的榜单？"
-        description="将用分享的榜单覆盖当前编辑器内容，当前榜单已自动保存到「我的排名」。"
+        description={
+          shared?.display
+            ? "将用分享的榜单覆盖当前编辑器内容（含分享者的显示设置），当前榜单已自动保存到「我的排名」。"
+            : "将用分享的榜单覆盖当前编辑器内容，当前榜单已自动保存到「我的排名」。"
+        }
         confirmText="覆盖并编辑"
         onConfirm={applyShared}
       />

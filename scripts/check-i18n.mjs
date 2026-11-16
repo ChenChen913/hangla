@@ -42,6 +42,19 @@ const cmdMain = commands(main).join(" ");
 const cmdAlt = commands(alt).join(" ");
 if (cmdMain !== cmdAlt) fail(`npm 命令不一致：\n    ${MAIN}: ${cmdMain}\n    ${ALT}: ${cmdAlt}`);
 
+// 命令必须真实存在：以前只比较两份文档"写的是不是同一个词"，
+// 两份一起写一个 package.json 里没有的脚本（比如改名后的 build:pages）也照样通过
+try {
+  const scripts = Object.keys(JSON.parse(fs.readFileSync("package.json", "utf8")).scripts ?? {});
+  for (const [name, list] of [[MAIN, commands(main)], [ALT, commands(alt)]]) {
+    for (const cmd of list) {
+      if (!scripts.includes(cmd)) fail(`${name} 里的 npm run ${cmd} 在 package.json 的 scripts 里不存在`);
+    }
+  }
+} catch {
+  fail("读不到 package.json 的 scripts，无法核对文档里的命令");
+}
+
 // 双向互指，且都在首屏
 for (const [self, other, text] of [[MAIN, ALT, main], [ALT, MAIN, alt]]) {
   if (!text.includes(other)) {

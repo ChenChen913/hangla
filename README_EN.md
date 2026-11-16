@@ -29,6 +29,7 @@ git clone https://github.com/ChenChen913/hangla.git && cd hangla && npm install 
 - **4 visual styles × day/night palettes** (8 themes): 现代 (modern) / 经典梗图 (classic meme) / 抽象梗风 (abstract meme) / 赛博霓虹 (cyber neon)
 - **High-resolution PNG export**: rendered at 2× pixel ratio, file name follows `<timestamp>-<board name>-排行榜.png`, timestamped to the second
 - **Share links**: the whole board (images included) is encoded into the URL, so the recipient sees the same board and can copy it into their own editor in one click. Images are inlined, though — **one re-encoded photo adds roughly 140k characters to the link**, far beyond what WeChat / QQ will carry, so the dialog reports the actual length and promotes the PNG download when the link is long
+- **Mobile**: bottom action bar with 44px touch targets; long-press for 0.2s to drag, tap a card to open the edit sheet; moving items between tiers, reordering tiers and deleting never depend on dragging; dialogs become bottom sheets with safe-area, dynamic-viewport and soft-keyboard handling
 - **Item pool**: a staging area for unranked items — upload a logo, add a one-line description, paste or drop images; images are re-encoded by content (photos become JPEG, illustrations with transparency stay PNG) with the longest side capped at 640px
 - **My boards**: save board snapshots in this browser, up to 30 of them; JSON export / import is available for backup
 - **Fullscreen layout**: hide the navigation bar and show nothing but the board — handy for streaming or screen recording
@@ -106,9 +107,11 @@ The editor looks like this (items still waiting in the pool on the right can be 
 
 Every setting (appearance, display and typography, board content) is stored automatically in the browser's localStorage. **There is no config file and no environment variable** (nothing under `src/` reads `import.meta.env` or `process.env`, so there is no `.env` to create).
 
-The board lives under the localStorage key `hangla.v3`, and images under `hangla.v3::images`: an image referenced by several snapshots is stored only once, and it is reclaimed automatically once no item uses it.
+The board and its image table share a single localStorage key, `hangla.v3`: a write either lands in full or not at all, so there is never a "new board with an old image table" mismatch. An image referenced by several snapshots is stored once and reclaimed once unused; the old two-key archive (`hangla.v3` + `hangla.v3::images`) is still readable and collapses into the single key on the first save. If the browser refuses localStorage (private mode / blocked site data), the app falls back to memory and shows a persistent banner that changes will be lost on refresh.
 
 A re-encoded photo is about 80KB (the same image stored as-is is 800KB or more), so the measured browser quota (about 5MB in Chrome) fits roughly sixty-plus photos. Near the limit you get a warning, and a failed write tells you exactly which change was not saved instead of dropping it silently.
+
+Display settings (image/name visibility, tilt, font size, font family, row gap) are a local preference, but they travel with **snapshots** and **share links**: whoever opens a link sees the board as you shared it, and restoring a snapshot restores those settings too. Undo only rolls back board content, never appearance. Importing JSON only adds a snapshot and never overwrites the board you are editing; imports are capped at 8MB.
 
 Common scripts:
 
@@ -143,9 +146,13 @@ hangla/
 ├── docs/                     # screenshots used by the READMEs
 ├── scripts/
 │   ├── check-anchors.mjs     # README anchor checker
-│   └── check-i18n.mjs        # bilingual consistency checker
+│   ├── check-i18n.mjs        # bilingual consistency checker
+│   ├── check-facts.mjs       # documented facts (numbers / commands / links) checker
+│   ├── project-facts.json    # single source of truth for README facts
+│   ├── browser-check.mjs     # real-Chrome regression (CDP, optional)
+│   └── mobile-check.mjs      # mobile layout + touch interaction checks across nine viewports (CDP, optional)
 ├── src/
-│   ├── main.tsx              # entry: legacy save migration, legacy share links
+│   ├── main.tsx              # entry: mounts React, legacy share links
 │   ├── App.tsx               # HashRouter + route transition animation
 │   ├── index.css             # Tailwind 4 + theme variables + font
 │   ├── types.ts              # data model
@@ -161,15 +168,20 @@ hangla/
 │   │   ├── label.test.ts     # contrast tests across every preset
 │   │   ├── history.ts        # undo / redo stack (in memory, coalesces typing)
 │   │   ├── history.test.ts   # undo stack tests
-│   │   ├── images.ts         # image reading and re-encoding
+│   │   ├── legacy.ts         # v2 save migration (skips safely when storage is unavailable)
+│   │   ├── legacy.test.ts    # legacy migration tests
+│   │   ├── images.ts         # image reading, bounded concurrency and re-encoding
+│   │   ├── images.test.ts    # batch image scheduling tests
 │   │   ├── exportNode.ts     # off-screen export canvas ref (shared by export / share)
 │   │   ├── drag.ts           # drag-sorting helpers
-│   │   ├── storage.ts        # storage layer (image interning, batched writes, failure fallback)
-│   │   ├── storage.test.ts   # storage layer tests
-│   │   ├── share.ts          # share-link building and availability check
-│   │   ├── utils.ts          # helpers, share encode/decode
-│   │   ├── utils.test.ts     # data normalisation / share codec tests
-│   │   └── drag.test.ts      # drag-sorting tests
+│   │   ├── drag.test.ts      # drag-sorting tests
+│   │   ├── storage.ts        # storage layer (atomic single-key writes, image interning, failure fallback)
+│   │   ├── storage.test.ts   # storage failure-injection tests
+│   │   ├── share.ts          # share-link building, size estimation and availability check
+│   │   ├── share.test.ts     # share length tiers / encode-limit tests
+│   │   ├── utils.ts          # helpers, data normalisation, share codec
+│   │   ├── utils.test.ts     # data limits / share codec / FileReader tests
+│   │   └── facts.test.ts     # documented facts ↔ code constants
 │   ├── components/           # TierBoard / TierRow / ItemChip / dialogs …
 │   └── pages/                # EditorPage / PreviewPage / TemplatesPage / MinePage
 └── legacy/                   # archived v0.2 vanilla build
@@ -179,11 +191,18 @@ hangla/
 
 ```sh
 npm run dev        # dev server with instant hot reload
-npm run test       # unit tests (data normalisation / share codec / storage layer / board actions / drag sorting)
+npm run test       # unit tests (data limits / share codec / storage failure injection / image batch / legacy migration / doc facts)
 npm run build      # type-check + single-file build
 npm run build:web  # type-check + web build (external fonts, for deployment)
 npm run preview    # preview the build output
-npm run docs:check # README anchors + bilingual consistency
+npm run docs:check # README anchors + bilingual consistency + fact-number checks
+```
+
+There are two optional browser check scripts (needs Chrome installed; run `npm run build:web` first):
+
+```sh
+npm run browser:check   # real Chrome: upload / drag / share round-trip / snapshot restore / PNG export / mobile / storage fallback
+npm run mobile:check    # nine viewports: overflow, touch targets, bottom sheets, long-press drag, long text, export/import
 ```
 
 `npm install` installs husky's Git hooks through the `prepare` script: `commitlint` validates commit messages against Conventional Commits when you commit (`.husky/commit-msg`), and `pre-commit` runs the full `npm run docs:check` (anchors + bilingual consistency) whenever a README changes.
@@ -200,6 +219,12 @@ The link encodes the entire board including images, so a long one can be truncat
 
 **My data disappeared after switching browsers?**
 Data is stored per browser in localStorage. To move it across devices use a share link, or export important boards from "My boards".
+
+**How do I drag or reorder on a phone?**
+Long-press a card for about 0.2s, then drag; or tap the card to open the edit sheet and use "上移 / 下移 / 移到上一档 / 移到下一档". Tier order is in the dialog opened by tapping the tier name. A normal swipe scrolls the page instead of dragging a card.
+
+**Do share links carry my display settings?**
+Yes. The link encodes the display settings at share time (image/name visibility, tilt, font size, font family, row gap), so the receiver sees exactly what you saw; "copy to edit" applies them too. Snapshots behave the same way: preview and restore both use the saved settings — only undo leaves appearance alone.
 
 **What happens when I add a lot of images?**
 Images live in the browser's localStorage, so the quota is up to the browser (about 5MB in Chrome, which measured out to roughly sixty-plus photos). When it fills up a toast tells you the change was not saved — delete a few images and you are back in business. Export the PNG first for anything you care about.

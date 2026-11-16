@@ -14,9 +14,10 @@ const buttonVariants = cva(
         danger: "border border-danger/40 bg-danger/15 text-danger hover:bg-danger/25",
       },
       size: {
-        default: "h-9 px-3.5",
-        sm: "h-7 px-2.5 text-xs",
-        icon: "h-9 w-9",
+        // 手机 44px、桌面 36px：触屏够得着，桌面不变胖
+        default: "h-11 px-3.5 md:h-9",
+        sm: "h-10 px-2.5 text-xs md:h-7",
+        icon: "h-11 w-11 md:h-9 md:w-9",
       },
     },
     defaultVariants: { variant: "default", size: "default" },

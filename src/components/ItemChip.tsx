@@ -1,7 +1,7 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Pencil } from "lucide-react";
-import { memo } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import type { DisplaySettings, Item } from "../types";
 import { useBoard } from "../store/board";
 import { useUi } from "../store/ui";
@@ -29,7 +29,8 @@ export function ChipView({ item, display }: { item: Item; display: DisplaySettin
       )}
       {showName && (
         <span
-          className="max-w-[220px] truncate"
+          // 手机上允许换行（长名字不再被省略号吃掉）；桌面保持单行截断
+          className="min-w-0 break-words [overflow-wrap:anywhere] md:max-w-[220px] md:truncate"
           style={{
             fontFamily: display.cardFont || undefined,
             fontSize: display.cardFontSize,
@@ -69,7 +70,36 @@ export const ItemChip = memo(function ItemChip({
   const display = useBoard(s => s.display);
   // 歪着放：旋转整个项目卡（背景/边框/图/名一起斜，像贴纸）；dnd-kit 的拖拽位移与其合并
   const tiltRot = display.tiltImages && item.image ? `rotate(${itemAngle(item, display)}deg)` : undefined;
-  const canDoubleClickDelete = allowDoubleClickDelete && !overlay;
+  // 触屏判定只做一次：既用于"点卡片打开编辑"，也用于关掉双击删除
+  // （手机上没有 hover，双击删除极易在"点两下打开编辑"时误删）
+  const [isTouch] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(hover: none)").matches,
+  );
+  const canDoubleClickDelete = allowDoubleClickDelete && !overlay && !isTouch;
+  // 拖拽结束后浏览器仍可能补发一次 click：用一段时间窗把它吞掉，
+  // 否则「长按拖到另一档」松手后会顺手弹出编辑框
+  const draggingRef = useRef(false);
+  useEffect(() => {
+    if (isDragging) {
+      draggingRef.current = true;
+      return;
+    }
+    if (!draggingRef.current) return;
+    const t = setTimeout(() => {
+      draggingRef.current = false;
+    }, 350);
+    return () => clearTimeout(t);
+  }, [isDragging]);
+
+  /**
+   * 触屏：点卡片打开编辑弹窗（移动 / 换档 / 删除都在弹窗里，44px 按钮）。
+   * 桌面保持原样——悬停出编辑/删除小按钮，避免单击误触。
+   */
+  function handleClick(e: React.MouseEvent) {
+    if (overlay || draggingRef.current || !isTouch) return;
+    if ((e.target as HTMLElement).closest(".chip-actions")) return;
+    openItemDialog(item);
+  }
 
   return (
     <div
@@ -81,6 +111,7 @@ export const ItemChip = memo(function ItemChip({
       }
       {...(overlay ? {} : attributes)}
       {...(overlay ? {} : listeners)}
+      onClick={handleClick}
       // 项目库的提示写着「双击条目删除」，这里把它兑现；档位内不传该 prop，不会误删
       onDoubleClick={
         canDoubleClickDelete
@@ -93,7 +124,7 @@ export const ItemChip = memo(function ItemChip({
       }
       title={item.desc || item.name}
       className={cn(
-        "group relative inline-flex select-none items-center gap-2 rounded-xl border border-chipline bg-chip text-chipink shadow-[0_1px_3px_rgba(16,24,40,.08)]",
+        "group relative inline-flex max-w-full shrink-0 select-none items-center gap-2 rounded-xl border border-chipline bg-chip text-chipink shadow-[0_1px_3px_rgba(16,24,40,.08)] active:opacity-90",
         // 有图时内边距均匀；右侧留白只在显示名称时需要（给图和文字之间留间距），
         // 否则隐藏名称后图片右侧会多出一条底色边
         item.image && display.showImages

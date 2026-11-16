@@ -55,4 +55,12 @@ export type Snapshot = {
   title: string;
   savedAt: number;
   board: Board;
+  /**
+   * 保存那一刻的显示设置。
+   *
+   * 显示设置在本机是全局偏好，但快照 / 分享链接是一份「成品」：预览、恢复、分享卡片
+   * 都按这里存的设置渲染，才能做到「预览看到什么，恢复后就是什么」。
+   * 旧快照没有这个字段（undefined），回落到本机当前设置。
+   */
+  display?: DisplaySettings;
 };

@@ -27,6 +27,7 @@ git clone https://github.com/ChenChen913/hangla.git && cd hangla && npm install 
 - **4 种视觉风格 × 昼夜两套配色**（共 8 套主题）：现代 / 经典梗图 / 抽象梗风 / 赛博霓虹
 - **高清 PNG 导出**：按 2 倍像素比渲染，文件名格式为 `<时间戳>-<榜单名>-排行榜.png`，时间戳精确到秒
 - **分享链接**：整份榜单（含图片）编码进链接，对方打开即见同款，可一键复制回自己的编辑器。注意图片是内联的——**一张压缩后的照片大约给链接增加 14 万字符**，远超微信 / QQ 能收的长度，所以弹窗会按实际字符数提示，长链接时把「下载 PNG」提到主按钮
+- **手机端**：底部操作栏 + 44px 触控区；长按 0.2 秒拖拽，点卡片打开编辑抽屉；档位 / 条目的上移下移、换档、删除都不依赖拖拽；弹窗在手机上变成底部抽屉，适配安全区、动态视口与软键盘
 - **项目库**：未排名素材池，支持上传 Logo、写一句话描述、粘贴或拖入图片；图片按内容重编码（照片转 JPEG、带透明的插画留 PNG），最长边 640px
 - **我的排名**：本机保存榜单快照，最多保留 30 份；支持导出 / 导入 JSON 备份
 - **全屏排版**：隐藏导航栏，直播 / 录屏时只留排行榜本身
@@ -104,9 +105,11 @@ npm run build:web
 
 所有设置（外观、显示与样式、榜单内容）自动保存在浏览器 localStorage，**无需配置文件，也不读取任何环境变量**（`src/` 下没有 `import.meta.env` / `process.env` 的用法，不用建 `.env`）。
 
-榜单存在 localStorage 的 `hangla.v3` 键下，图片另存于 `hangla.v3::images`：同一张图被多份快照引用时只存一份，删除项目后会自动回收。
+榜单和图片表存在 localStorage 的同一个 `hangla.v3` 键里：一次写入要么整份成功、要么整份失败，不会出现「正文已是新的、图片库还是旧的」这种版本错配。同一张图被多份快照引用时只存一份，删除项目后会自动回收；旧版的双键存档（`hangla.v3` + `hangla.v3::images`）仍然能读，首次保存后自动收敛成单键并清掉旧图片库。浏览器不允许写本地存储时（隐私模式 / 禁用站点数据），应用会退回内存运行，并在顶部常驻一条「刷新后会丢失」的提示。
 
 单张照片重编码后约 80KB（同样尺寸不做处理时是 800KB 以上），实测浏览器配额（Chrome 约 5MB）大约能放六十多张。接近上限时会提示，写盘失败也会明确告诉你哪一步没保存下来，不会静默丢数据。
+
+「显示与样式」（图片 / 名称显隐、歪斜、字号、字体、档位间距）是本机偏好，但会跟着**快照**和**分享链接**一起保存：别人打开链接看到的是你分享时的样子；恢复快照时也会一并恢复，撤销则只回退榜单内容、不回退这些设置。导入 JSON 只存为快照，不会覆盖正在编辑的榜单，导入文件上限 8MB。
 
 常用脚本：
 
@@ -141,9 +144,13 @@ hangla/
 ├── docs/                     # README 截图
 ├── scripts/
 │   ├── check-anchors.mjs     # README 站内锚点自检
-│   └── check-i18n.mjs        # 中英 README 一致性校验
+│   ├── check-i18n.mjs        # 中英 README 一致性校验
+│   ├── check-facts.mjs       # 文档事实（数字 / 命令 / 链接）校验
+│   ├── project-facts.json    # README 事实的唯一来源
+│   ├── browser-check.mjs     # 真实 Chrome 回归（CDP，可选）
+│   └── mobile-check.mjs      # 移动端 9 视图布局 + 触屏交互检查（CDP，可选）
 ├── src/
-│   ├── main.tsx              # 入口：旧存档迁移、旧分享链接兼容
+│   ├── main.tsx              # 入口：挂载 React、旧分享链接兼容
 │   ├── App.tsx               # HashRouter + 路由切换动画
 │   ├── index.css             # Tailwind 4 + 主题变量 + 字体
 │   ├── types.ts              # 数据模型
@@ -159,15 +166,20 @@ hangla/
 │   │   ├── label.test.ts     # 全预设标签对比度测试
 │   │   ├── history.ts        # 撤销 / 重做栈（内存态，合并连续输入）
 │   │   ├── history.test.ts   # 撤销栈测试
-│   │   ├── images.ts         # 图片读取与重编码
+│   │   ├── legacy.ts         # v2 旧存档迁移（存储不可用时安全跳过）
+│   │   ├── legacy.test.ts    # 旧档迁移测试
+│   │   ├── images.ts         # 图片读取、有限并发与重编码
+│   │   ├── images.test.ts    # 批量图片调度测试
 │   │   ├── exportNode.ts     # 屏幕外导出画布引用（导出 / 分享截图共用）
 │   │   ├── drag.ts           # 拖拽排序辅助逻辑
-│   │   ├── storage.ts        # 存档存储层（图片驻留去重、延迟合并写入、写失败兜底）
-│   │   ├── storage.test.ts   # 存档存储层测试
-│   │   ├── share.ts          # 分享链接构造与可用性判断
-│   │   ├── utils.ts          # 工具函数、分享编解码
-│   │   ├── utils.test.ts     # 数据规范化 / 分享编解码测试
-│   │   └── drag.test.ts      # 拖拽排序测试
+│   │   ├── drag.test.ts      # 拖拽排序测试
+│   │   ├── storage.ts        # 存档存储层（单 Key 原子写入、图片驻留去重、写失败兜底）
+│   │   ├── storage.test.ts   # 存档故障注入测试
+│   │   ├── share.ts          # 分享链接构造、体量估算与可用性判断
+│   │   ├── share.test.ts     # 分享长度分级 / 编码上限测试
+│   │   ├── utils.ts          # 工具函数、数据规范化、分享编解码
+│   │   ├── utils.test.ts     # 数据边界 / 分享编解码 / FileReader 测试
+│   │   └── facts.test.ts     # 文档事实 ↔ 代码常量校验
 │   ├── components/           # TierBoard / TierRow / ItemChip / 弹窗等
 │   └── pages/                # EditorPage / PreviewPage / TemplatesPage / MinePage
 └── legacy/                   # v0.2 纯 vanilla 版本留档
@@ -177,11 +189,18 @@ hangla/
 
 ```sh
 npm run dev        # 开发服务器，改代码即时热更新
-npm run test       # 单元测试（数据规范化 / 分享编解码 / 存档存储层 / 榜单操作 / 拖拽排序）
+npm run test       # 单元测试（数据边界 / 分享编解码 / 存档故障注入 / 图片批量 / 旧档迁移 / 文档事实）
 npm run build      # 类型检查 + 打包单文件版
 npm run build:web  # 类型检查 + 网页版构建（字体独立，部署用）
 npm run preview    # 预览构建产物
-npm run docs:check # README 锚点 + 双语一致性自检
+npm run docs:check # README 锚点 + 双语一致性 + 事实数字校验
+```
+
+另有两份可选的浏览器检查脚本（需要本机装 Chrome，先 `npm run build:web` 生成 `dist-web/`）：
+
+```sh
+npm run browser:check   # 真实 Chrome：上传 / 拖拽 / 分享往返 / 快照恢复 / PNG 导出 / 移动端 / 存储降级
+npm run mobile:check    # 9 种视口：横向溢出、触控目标、底部抽屉、长按拖拽、长文本、导出导入
 ```
 
 `npm install` 会通过 `prepare` 脚本装上 husky 的 Git 钩子：提交时由 `commitlint` 按 Conventional Commits 校验提交信息（`.husky/commit-msg`），改动 README 时 `pre-commit` 会跑完整的 `npm run docs:check`（站内锚点 + 双语一致性）。
@@ -198,6 +217,12 @@ npm run docs:check # README 锚点 + 双语一致性自检
 
 **换浏览器后数据没了？**
 数据按浏览器隔离存储在 localStorage。跨设备请使用「分享链接」，或在「我的排名」导出重要榜单。
+
+**手机上怎么拖拽 / 调整顺序？**
+长按卡片约 0.2 秒再拖动；也可以直接点卡片打开编辑抽屉，用「上移 / 下移 / 移到上一档 / 移到下一档」按钮。档位顺序在点档位名打开的弹窗里调。手指落下后直接滑动是滚动页面，不会误拖卡片。
+
+**分享链接会带上我的显示设置吗？**
+会。链接里编码了分享那一刻的显示与样式（图片 / 名称显隐、歪斜、字号、字体、档位间距），接收者打开看到的就是你分享时的样子；「复制一份来编辑」也会应用这套设置。快照同理：预览、恢复都按保存时的设置还原，只有「撤销」不会回退外观。
 
 **图片加多了会怎样？**
 图片存在浏览器 localStorage，配额由浏览器决定（Chrome 约 5MB，实测能放六十多张照片）。写满时会弹提示告诉你没保存成功，此时删掉几张图片即可恢复——重要榜单建议先用「导出 PNG」留底。

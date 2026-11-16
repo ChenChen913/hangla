@@ -49,8 +49,10 @@ export const TierRow = memo(function TierRow({ tier }: { tier: Tier }) {
       <button
         onClick={() => setEditing(true)}
         title="点击编辑档位"
+        aria-label={`编辑档位「${tier.name}」`}
         className={cn(
-          "flex w-[104px] shrink-0 cursor-pointer items-center justify-center px-2 py-4 text-center transition-[filter] md:w-[176px] md:py-5",
+          // 手机上把标签列压到 88px，给卡片多留 16px；320px 宽度下这一列仍然能放下三个大字
+          "flex w-[88px] shrink-0 cursor-pointer items-center justify-center px-1.5 py-4 text-center transition-[filter] sm:w-[104px] md:w-[176px] md:px-2 md:py-5",
           !isTierStyle && "hover:brightness-105",
           isOver && "brightness-110",
         )}
@@ -64,7 +66,7 @@ export const TierRow = memo(function TierRow({ tier }: { tier: Tier }) {
           name={tier.name}
           display={display}
           replayKey={replayKey}
-          sizeClass="text-2xl font-black tracking-wide md:text-[32px]"
+          sizeClass="text-xl font-black tracking-wide sm:text-2xl md:text-[32px]"
         />
       </button>
 
@@ -72,8 +74,9 @@ export const TierRow = memo(function TierRow({ tier }: { tier: Tier }) {
       <div
         ref={setNodeRef}
         data-tier-id={tier.id}
-        // 触屏下快捷工具条常显（约 66px 宽），移动端右侧留足 78px，最后一张卡不会被盖住
-        className="relative flex min-h-[88px] flex-1 flex-wrap content-start items-start gap-2.5 p-3.5 pr-[78px] md:pr-12"
+        // 触屏上行工具条已隐藏（见 index.css），不再需要给右上角留 78px；
+        // 桌面 hover 时工具条仍在，md 以上保留右侧内边距
+        className="relative flex min-h-[88px] flex-1 flex-wrap content-start items-start gap-2 p-3 md:gap-2.5 md:p-3.5 md:pr-12"
         style={{
           background: mixColors(tier.color, panel, 0.08),
           outline: isOver ? `2px dashed ${tier.color}` : undefined,
@@ -150,7 +153,7 @@ export function TierRowReadonly({
       )}
     >
       <div
-        className="flex w-[104px] shrink-0 items-center justify-center px-2 py-4 text-center md:w-[168px]"
+        className="flex w-[88px] shrink-0 items-center justify-center px-1.5 py-4 text-center sm:w-[104px] md:w-[168px] md:px-2"
         style={{
           background: label.background,
           color: label.color,
@@ -160,11 +163,11 @@ export function TierRowReadonly({
           name={tier.name}
           display={display}
           replayKey={0}
-          sizeClass="text-2xl font-black leading-none tracking-wide md:text-[30px]"
+          sizeClass="text-xl font-black leading-none tracking-wide sm:text-2xl md:text-[30px]"
         />
       </div>
       <div
-        className="flex min-h-[72px] flex-1 flex-wrap content-start items-start gap-2.5 p-3.5"
+        className="flex min-h-[72px] flex-1 flex-wrap content-start items-start gap-2 p-3 md:gap-2.5 md:p-3.5"
         style={{ background: mixColors(tier.color, panel, 0.08) }}
       >
         {tier.items.length === 0 && <span className="self-center text-[13px] text-ink/25">空</span>}
@@ -177,7 +180,7 @@ export function TierRowReadonly({
             <span
               key={item.id}
               title={item.desc || item.name}
-              className="inline-flex max-w-[260px] items-center gap-2 truncate rounded-xl border border-chipline bg-chip px-3 py-1.5 text-chipink shadow-[0_1px_3px_rgba(16,24,40,.08)]"
+              className="inline-flex max-w-full items-center gap-2 rounded-xl border border-chipline bg-chip px-3 py-1.5 text-chipink shadow-[0_1px_3px_rgba(16,24,40,.08)] md:max-w-[260px]"
               style={{
                 fontFamily: display.cardFont || undefined,
                 fontSize: display.cardFontSize,
@@ -195,7 +198,10 @@ export function TierRowReadonly({
                   style={{ width: display.cardImageSize, height: display.cardImageSize }}
                 />
               )}
-              {showName && <span className="truncate">{item.name}</span>}
+              {showName && (
+                // 手机上允许换行（长名字不再被省略号吃掉）；桌面保持单行截断
+                <span className="min-w-0 break-words [overflow-wrap:anywhere] md:truncate">{item.name}</span>
+              )}
             </span>
           );
         })}

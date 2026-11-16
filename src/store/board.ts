@@ -4,12 +4,28 @@ import type { Board, DisplaySettings, Item, Snapshot, Tier } from "../types";
 import type { Mode, StyleId } from "../lib/themes";
 import { presetTiers } from "../lib/presets";
 import { MODE_NAMES, STYLE_NAMES } from "../lib/themes";
-import { clamp, normalizeBoard, uid } from "../lib/utils";
-import { createBoardStorage } from "../lib/storage";
+import {
+  BOARD_LIMITS,
+  DEFAULT_DISPLAY,
+  clamp,
+  normalizeBoard,
+  normalizeDisplay,
+  normalizeItem,
+  safeTierColor,
+  truncateText,
+  uid,
+} from "../lib/utils";
+import { STORAGE_KEY, createBoardStorage } from "../lib/storage";
+import { locateItem } from "../lib/drag";
 import { boardSnapshot, createHistory, sameBoard } from "../lib/history";
 import { toast } from "./toast";
 
 const PALETTE = ["#E8934A", "#55A878", "#7D96B8", "#B583D6", "#E15D5D", "#E9B44C", "#9AA5B1"];
+
+/** 快照份数上限：再多就会把 localStorage 配额吃光，也没人会翻到第 31 份 */
+export const MAX_SNAPSHOTS = 30;
+// 持久化 key 定义在存储层（探测需要它），这里转出以保持既有引用路径
+export { STORAGE_KEY };
 
 export function freshBoard(): Board {
   const tiers = presetTiers("hangla")!;
@@ -66,8 +82,17 @@ type BoardStore = Board & {
   addImagesToPool(items: Item[], toTierId?: string): void;
   updateItem(id: string, patch: Partial<Omit<Item, "id">>): void;
   removeItem(id: string): void;
+  /** 在当前容器内上移 / 下移一位（不依赖拖拽的备用操作）；越界返回 false */
+  nudgeItem(id: string, dir: -1 | 1): boolean;
+  /** 移到相邻档位（最后一个档位的下一档是项目库，项目库的上一档是最后一个档位） */
+  shiftItem(id: string, dir: -1 | 1): boolean;
   moveItem(id: string, toTierId: string | null, index: number): void;
   importBoard(b: Partial<Board>): void;
+  /**
+   * 只把数据存成快照，**不碰编辑器**。
+   * 导入 JSON 走这条：失败时编辑器一个字节都不会变，成功也不会污染撤销栈。
+   */
+  importBoardAsSnapshot(raw: unknown): { ok: true; title: string } | { ok: false; reason: string };
   resetBoard(): void;
   saveSnapshot(): void;
   deleteSnapshot(id: string): void;
@@ -95,16 +120,44 @@ const undoStack = createHistory({ limit: 50, mergeWindow: 600 });
 /** 撤销 / 重做落状态时不要再记一条历史 */
 let restoring = false;
 
+/** 清空撤销栈。刷新 / 跨标签页水合时调用；测试用它隔离用例之间的历史 */
+export function resetHistory(): void {
+  undoStack.clear();
+  useBoard.setState({ history: undoStack.sizes() });
+}
+
+/** 快照规范化：旧快照没有 display，保持 undefined（= 沿用本机设置） */
+function normalizeSnapshot(raw: unknown, seen: Set<string>): Snapshot | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const board = normalizeBoard(r.board);
+  const candidate =
+    typeof r.id === "string" && r.id.trim() !== "" && r.id.length <= BOARD_LIMITS.id ? r.id : uid();
+  const id = seen.has(candidate) ? uid() : candidate;
+  seen.add(id);
+  const rawTitle = typeof r.title === "string" ? r.title : board.title;
+  return {
+    id,
+    title: truncateText(rawTitle.trim(), BOARD_LIMITS.title) || "未命名榜单",
+    savedAt: typeof r.savedAt === "number" && Number.isFinite(r.savedAt) ? r.savedAt : Date.now(),
+    board,
+    display: r.display == null ? undefined : normalizeDisplay(r.display),
+  };
+}
+
 export const useBoard = create<BoardStore>()(
   persist(
     (set, get) => ({
       ...freshBoard(),
       snapshots: [],
       history: { past: 0, future: 0 },
-      display: { showImages: true, showNames: true, tiltImages: false, tiltMax: 20, cardFont: "", cardFontSize: 15, cardFontWeight: 500, cardImageSize: 56, labelFont: "standard", labelAnim: "standard", labelFlat: false, rowGap: 12 },
+      display: { ...DEFAULT_DISPLAY },
 
-      setTitle: title => set({ title }),
-      setSubtitle: subtitle => set({ subtitle: subtitle || undefined }),
+      setTitle: title => set({ title: truncateText(title, BOARD_LIMITS.title) }),
+      setSubtitle: subtitle => {
+        const t = truncateText(subtitle, BOARD_LIMITS.subtitle);
+        set({ subtitle: t || undefined });
+      },
       setStyle: style => set({ style }),
       toggleMode: () => {
         const s = get();
@@ -113,8 +166,13 @@ export const useBoard = create<BoardStore>()(
         toast(`已切换到${STYLE_NAMES[s.style] ?? ""}${MODE_NAMES[next]}配色`);
       },
 
-      addTier: () =>
-        set(s => ({
+      addTier: () => {
+        const s = get();
+        if (s.tiers.length >= BOARD_LIMITS.tiers) {
+          toast(`最多 ${BOARD_LIMITS.tiers} 个档位，再多屏幕也放不下`);
+          return;
+        }
+        set({
           tiers: [
             ...s.tiers,
             {
@@ -125,7 +183,8 @@ export const useBoard = create<BoardStore>()(
             },
           ],
           presetId: "custom",
-        })),
+        });
+      },
 
       deleteTier: id =>
         set(s => {
@@ -140,7 +199,15 @@ export const useBoard = create<BoardStore>()(
 
       updateTier: (id, patch) =>
         set(s => ({
-          tiers: s.tiers.map(t => (t.id === id ? { ...t, ...patch } : t)),
+          tiers: s.tiers.map(t =>
+            t.id === id
+              ? {
+                  ...t,
+                  name: patch.name === undefined ? t.name : truncateText(patch.name.trim(), BOARD_LIMITS.tierName) || t.name,
+                  color: patch.color === undefined ? t.color : safeTierColor(patch.color),
+                }
+              : t,
+          ),
           presetId: "custom",
         })),
 
@@ -179,26 +246,115 @@ export const useBoard = create<BoardStore>()(
           return { tiers, pool: [...s.pool, ...s.tiers.flatMap(t => t.items)], presetId };
         }),
 
-      addItemToPool: item => set(s => ({ pool: [...s.pool, item] })),
+      addItemToPool: item => {
+        const s = get();
+        if (s.pool.length >= BOARD_LIMITS.pool) {
+          toast(`项目库最多 ${BOARD_LIMITS.pool} 项，先清理一些再添加`);
+          return;
+        }
+        set({ pool: [...s.pool, normalizeItem({ ...item, id: item.id })] });
+      },
 
-      addImagesToPool: (items, toTierId) =>
-        set(s =>
-          toTierId && s.tiers.some(t => t.id === toTierId)
-            ? { tiers: s.tiers.map(t => (t.id === toTierId ? { ...t, items: [...t.items, ...items] } : t)) }
-            : { pool: [...s.pool, ...items] },
-        ),
+      addImagesToPool: (items, toTierId) => {
+        if (!items.length) return;
+        const s = get();
+        const safeItems = items.map(i => normalizeItem(i));
+        const tier = toTierId ? s.tiers.find(t => t.id === toTierId) : undefined;
+        if (tier) {
+          const room = Math.max(0, BOARD_LIMITS.itemsPerTier - tier.items.length);
+          const add = safeItems.slice(0, room);
+          if (!add.length) {
+            toast(`这个档位已经有 ${BOARD_LIMITS.itemsPerTier} 项了，先挪走一些`);
+            return;
+          }
+          if (add.length < safeItems.length) toast(`${safeItems.length - add.length} 张图片超出单档上限，已跳过`, 4000);
+          set({ tiers: s.tiers.map(t => (t.id === tier.id ? { ...t, items: [...t.items, ...add] } : t)) });
+          return;
+        }
+        const room = Math.max(0, BOARD_LIMITS.pool - s.pool.length);
+        const add = safeItems.slice(0, room);
+        if (!add.length) {
+          toast(`项目库已经有 ${BOARD_LIMITS.pool} 项了，先清理一些`);
+          return;
+        }
+        if (add.length < safeItems.length) toast(`${safeItems.length - add.length} 张图片超出项目库上限，已跳过`, 4000);
+        set({ pool: [...s.pool, ...add] });
+      },
 
       updateItem: (id, patch) =>
-        set(s => ({
-          pool: s.pool.map(i => (i.id === id ? { ...i, ...patch } : i)),
-          tiers: s.tiers.map(t => ({ ...t, items: t.items.map(i => (i.id === id ? { ...i, ...patch } : i)) })),
-        })),
+        set(s => {
+          // 走和导入同一条规范化路径：名称 / 描述 / 图片 / 角度都在这里被夹紧
+          const apply = (i: Item) =>
+            i.id === id ? { ...normalizeItem({ ...i, ...patch, id: i.id }), id: i.id } : i;
+          return {
+            pool: s.pool.map(apply),
+            tiers: s.tiers.map(t => ({ ...t, items: t.items.map(apply) })),
+          };
+        }),
 
       removeItem: id =>
         set(s => ({
           pool: s.pool.filter(i => i.id !== id),
           tiers: s.tiers.map(t => ({ ...t, items: t.items.filter(i => i.id !== id) })),
         })),
+
+      nudgeItem: (id, dir) => {
+        const s = get();
+        const loc = locateItem(s, id);
+        if (!loc) return false;
+        const list = loc.container === "pool" ? s.pool : s.tiers[loc.tierIndex!].items;
+        const target = loc.index + dir;
+        if (target < 0 || target >= list.length) return false;
+
+        // 直接换位，不复用 moveItem 的"插入下标"语义：那个语义对同容器下移要 +2，容易算错
+        const next = [...list];
+        const [item] = next.splice(loc.index, 1);
+        next.splice(target, 0, item);
+
+        if (loc.container === "pool") set({ pool: next });
+        else set({ tiers: s.tiers.map(t => (t.id === loc.container ? { ...t, items: next } : t)) });
+        return true;
+      },
+
+      shiftItem: (id, dir) => {
+        const s = get();
+        const loc = locateItem(s, id);
+        if (!loc) return false;
+        // 容器顺序：档位 1..N，最后是项目库
+        const order = [...s.tiers.map(t => t.id), "pool"];
+        const from = order.indexOf(loc.container);
+        const to = from + dir;
+        if (from < 0 || to < 0 || to >= order.length) return false;
+        const targetId = order[to];
+        const item =
+          loc.container === "pool" ? s.pool[loc.index] : s.tiers[loc.tierIndex!].items[loc.index];
+
+        if (targetId === "pool") {
+          if (s.pool.length >= BOARD_LIMITS.pool) {
+            toast(`项目库最多 ${BOARD_LIMITS.pool} 项`);
+            return false;
+          }
+          const tiers = s.tiers.map(t =>
+            t.id === loc.container ? { ...t, items: t.items.filter(i => i.id !== id) } : t,
+          );
+          set({ tiers, pool: [...s.pool, item] });
+          return true;
+        }
+
+        const target = s.tiers.find(t => t.id === targetId)!;
+        if (target.items.length >= BOARD_LIMITS.itemsPerTier) {
+          toast(`这个档位最多 ${BOARD_LIMITS.itemsPerTier} 项`);
+          return false;
+        }
+        const cleaned = s.tiers.map(t =>
+          t.id === loc.container ? { ...t, items: t.items.filter(i => i.id !== id) } : t,
+        );
+        set({
+          tiers: cleaned.map(t => (t.id === targetId ? { ...t, items: [...t.items, item] } : t)),
+          ...(loc.container === "pool" ? { pool: s.pool.filter(i => i.id !== id) } : {}),
+        });
+        return true;
+      },
 
       moveItem: (id, toTierId, index) =>
         set(s => {
@@ -226,6 +382,23 @@ export const useBoard = create<BoardStore>()(
           const item = where === "pool" ? pool[fromIdx] : tiers.find(t => t.id === where)!.items[fromIdx];
 
           const targetKey = toTierId ?? "pool";
+          // 目标是同一档位时只是排序，不算新增占位
+          if (where !== targetKey) {
+            if (toTierId === null) {
+              if (pool.length >= BOARD_LIMITS.pool) {
+                toast(`项目库最多 ${BOARD_LIMITS.pool} 项`);
+                return {};
+              }
+            } else {
+              const target = tiers.find(t => t.id === toTierId);
+              if (!target) return {};
+              if (target.items.length >= BOARD_LIMITS.itemsPerTier) {
+                toast(`这个档位最多 ${BOARD_LIMITS.itemsPerTier} 项`);
+                return {};
+              }
+            }
+          }
+
           let idx = index;
           if (where === targetKey && fromIdx < idx) idx -= 1;
 
@@ -256,6 +429,21 @@ export const useBoard = create<BoardStore>()(
           };
         }),
 
+      importBoardAsSnapshot: raw => {
+        const n = normalizeBoard(raw);
+        if (n.tiers.length === 0) return { ok: false, reason: "榜单里没有任何有效档位" };
+        const snap: Snapshot = {
+          id: uid(),
+          title: n.title || "未命名榜单",
+          savedAt: Date.now(),
+          board: n,
+          // 导入的 JSON 不带显示设置：用本机当前的，之后预览 / 恢复都能复现
+          display: { ...get().display },
+        };
+        set(s => ({ snapshots: [snap, ...s.snapshots].slice(0, MAX_SNAPSHOTS) }));
+        return { ok: true, title: snap.title };
+      },
+
       resetBoard: () => set({ ...freshBoard(), snapshots: get().snapshots }),
 
       saveSnapshot: () =>
@@ -271,8 +459,16 @@ export const useBoard = create<BoardStore>()(
             tiers: s.tiers.map(t => ({ ...t, items: [...t.items] })),
             pool: [...s.pool],
           };
-          const snap: Snapshot = { id: uid(), title: s.title || "未命名榜单", savedAt: Date.now(), board };
-          return { snapshots: [snap, ...s.snapshots].slice(0, 30) };
+          const snap: Snapshot = {
+            id: uid(),
+            title: s.title || "未命名榜单",
+            savedAt: Date.now(),
+            board,
+            // 快照是一份「成品」：连当时的字号 / 歪斜 / 图片显隐一起存，
+            // 预览和恢复才能和保存时长得一模一样
+            display: { ...s.display },
+          };
+          return { snapshots: [snap, ...s.snapshots].slice(0, MAX_SNAPSHOTS) };
         }),
 
       deleteSnapshot: id => set(s => ({ snapshots: s.snapshots.filter(x => x.id !== id) })),
@@ -280,11 +476,15 @@ export const useBoard = create<BoardStore>()(
       loadSnapshot: id => {
         const snap = get().snapshots.find(x => x.id === id);
         if (!snap) return false;
-        set({ ...normalizeBoard(snap.board) });
+        set({
+          ...normalizeBoard(snap.board),
+          // 旧快照没有 display：只恢复榜单内容，本机显示设置保持不动
+          ...(snap.display ? { display: normalizeDisplay(snap.display) } : {}),
+        });
         return true;
       },
 
-      setDisplay: patch => set(s => ({ display: { ...s.display, ...patch } })),
+      setDisplay: patch => set(s => ({ display: normalizeDisplay({ ...s.display, ...patch }) })),
 
       undo: () => {
         const prev = undoStack.undo(boardSnapshot(get()));
@@ -309,9 +509,9 @@ export const useBoard = create<BoardStore>()(
       },
     }),
     {
-      name: "hangla.v3",
+      name: STORAGE_KEY,
       version: 10,
-      // 存储层负责：图片驻留去重、延迟合并写入、写失败兜底
+      // 存储层负责：图片驻留去重、单 Key 原子写入、写失败兜底、存储可用性探测
       storage: createBoardStorage<PersistedBoard>({
         onWriteError: () =>
           toast("浏览器存储已满，刚才这一步没保存下来——先导出 PNG 备份，再删掉几张图片重试", 6000),
@@ -330,34 +530,18 @@ export const useBoard = create<BoardStore>()(
         display: s.display,
       }),
       migrate: (persisted: unknown): PersistedBoard => {
-        const n = normalizeBoard(persisted);
-        const snaps = Array.isArray((persisted as { snapshots?: Snapshot[] }).snapshots)
-          ? ((persisted as { snapshots: Snapshot[] }).snapshots ?? []).map(x => ({
-              ...x,
-              board: normalizeBoard(x.board),
-            }))
-          : [];
-        const d = ((persisted as { display?: Partial<DisplaySettings> }).display ?? {}) as Partial<DisplaySettings>;
+        // 存档来自旧版本 / 被手工改过，任何字段都可能缺或类型不对：
+        // 统一走 normalizeBoard + normalizeDisplay，逐项夹到合法范围
+        const seen = new Set<string>();
+        const raw = (persisted && typeof persisted === "object" ? persisted : {}) as Record<string, unknown>;
+        const snaps = (Array.isArray(raw.snapshots) ? raw.snapshots : [])
+          .map(x => normalizeSnapshot(x, seen))
+          .filter((x): x is Snapshot => x !== null)
+          .slice(0, MAX_SNAPSHOTS);
         return {
-          ...n,
+          ...normalizeBoard(raw),
           snapshots: snaps,
-          display: {
-            showImages: d.showImages ?? true,
-            showNames: d.showNames ?? true,
-            tiltImages: d.tiltImages ?? false,
-            tiltMax: d.tiltMax ?? 20,
-            cardFont: d.cardFont ?? "",
-            cardFontSize: d.cardFontSize ?? 15,
-            cardFontWeight: d.cardFontWeight ?? 500,
-            cardImageSize: d.cardImageSize ?? 56,
-            labelFont: d.labelFont === "artistic" ? "artistic" : "standard",
-            labelAnim:
-              d.labelAnim === "off" || d.labelAnim === "subtle" || d.labelAnim === "strong"
-                ? d.labelAnim
-                : "standard",
-            labelFlat: d.labelFlat ?? false,
-            rowGap: d.rowGap ?? 12,
-          },
+          display: normalizeDisplay(raw.display),
         };
       },
     },
@@ -387,7 +571,6 @@ useBoard.subscribe((state, prev) => {
 // 刷新页面 / 跨标签页重新水合不是用户操作：清空历史，
 // 否则「撤销」会把这之后的编辑倒退回存档里没有的状态。
 useBoard.persist.onFinishHydration(() => {
-  undoStack.clear();
-  useBoard.setState({ history: undoStack.sizes() });
+  resetHistory();
 });
-if (useBoard.persist.hasHydrated()) undoStack.clear();
+if (useBoard.persist.hasHydrated()) resetHistory();

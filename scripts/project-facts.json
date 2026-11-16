@@ -1,0 +1,23 @@
+{
+  "$comment": "README 里可验证事实的唯一来源。scripts/check-facts.mjs 校验两份 README 与 package.json；src/lib/facts.test.ts 校验这里的数值与代码常量一致。改这里就必须同步代码与文档。",
+  "node": ">=20",
+  "presets": 5,
+  "styles": 4,
+  "modes": 2,
+  "snapshots": 30,
+  "shareComfortChars": 8000,
+  "shareSoftChars": 60000,
+  "shareHardChars": 2000000,
+  "importMaxMB": 8,
+  "imageMaxSide": 640,
+  "storageKey": "hangla.v3",
+  "demoUrl": "https://chenchen913.github.io/hangla/",
+  "scripts": [
+    "dev",
+    "build",
+    "build:web",
+    "preview",
+    "test",
+    "docs:check"
+  ]
+}

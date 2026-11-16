@@ -1,5 +1,5 @@
-import type { Board } from "../types";
-import { encodeBoard } from "./utils";
+import type { Board, DisplaySettings } from "../types";
+import { encodeBoard, encodeBoardAsync, estimateShareChars, measureShareChars } from "./utils";
 
 /**
  * 舒适上限：多数聊天软件（微信 / QQ / 群聊输入框）能完整收发链接的长度，
@@ -10,6 +10,8 @@ export const SHARE_URL_COMFORT_LIMIT = 8_000;
 export const SHARE_URL_SOFT_LIMIT = 60_000;
 /** 硬上限：超过后 URL 本身已不可靠（很多客户端直接截断），且编码/复制会明显卡顿，禁用复制 */
 export const SHARE_URL_HARD_LIMIT = 2_000_000;
+/** 超过这个体量改用分片异步编码，避免一次 base64 把主线程按死 */
+export const SHARE_ASYNC_THRESHOLD = 50_000;
 
 export type ShareLengthState = "ok" | "long" | "over";
 
@@ -21,27 +23,69 @@ export type ShareLengthInfo = {
   kb: number;
 };
 
-export function shareLengthInfo(url: string): ShareLengthInfo {
-  const chars = url.length;
+/**
+ * 长度分档。既接受现成的 URL（旧调用方），也接受字符数——
+ * 现在的流程是先量长度、再决定要不要真的编码，拿不到 URL 的时候要能单独判档。
+ */
+export function shareLengthInfo(input: string | number): ShareLengthInfo {
+  const chars = typeof input === "number" ? input : input.length;
   const state: ShareLengthState =
     chars > SHARE_URL_HARD_LIMIT ? "over" : chars > SHARE_URL_COMFORT_LIMIT ? "long" : "ok";
   return { state, chars, kb: Math.round((chars / 1024) * 10) / 10 };
 }
 
+/** 分享链接的前缀：当前页面去掉 hash。同一个页面里打开分享弹窗时取一次即可 */
+export function shareBase(): string {
+  if (typeof location === "undefined") return "https://example.invalid/";
+  return location.href.split("#")[0];
+}
+
+/** 分享链接：整份榜单（含图片与显示设置）编进 URL hash，不依赖任何服务端 */
+export function buildShareUrl(board: Board, display?: DisplaySettings, base = shareBase()): string {
+  return base + "#/r/" + encodeBoard(board, display);
+}
+
+export type SharePlan =
+  /** 预估或实测量级已超硬上限：**没有生成过链接**，调用方应引导用户下载 PNG */
+  | { status: "over"; chars: number; kb: number; estimated: boolean }
+  | { status: "ready"; url: string; chars: number; kb: number; state: ShareLengthState };
+
+function overPlan(chars: number, estimated: boolean): SharePlan {
+  const info = shareLengthInfo(chars);
+  return { status: "over", chars, kb: info.kb, estimated };
+}
+
 /**
- * 分享链接：整份榜单（含图片）编进 URL hash，不依赖任何服务端。
+ * 规划分享链接（同步版，供测试与短数据使用）。
  *
- * 两个已知边界：
- * - **离线版没有可分享的地址**：file:// 下拼出来的是本机路径，发给别人打不开；
- * - **带图就太长**：一张 640px 照片压缩后约 80KB，进 data URL 再整体 base64，
- *   编进链接约 14 万字符——远超聊天软件能收的长度。所以**含图榜单的正解是下载 PNG**，
- *   链接只适合纯文字榜单。
- *
- * TODO(部署后再做)：接一个短链服务——把 payload POST 给后端换成短 id，URL 只留 id。
- * 那时只需要改这里的 buildShareUrl，调用方（ShareDialog）不用动。
+ * 顺序很重要：先算体量下界 → 再精确量长度 → 只有确认没超硬上限才真的编码。
+ * 以前的实现是先 buildShareUrl 再判断长度：一个 5MB 的榜单会先生成 ~7MB 的字符串，
+ * 主线程卡死两三秒，然后才告诉用户"太长了"。
  */
-export function buildShareUrl(board: Board): string {
-  return location.href.split("#")[0] + "#/r/" + encodeBoard(board);
+export function planShareSync(board: Board, display?: DisplaySettings, base = shareBase()): SharePlan {
+  // 前缀 + "#/r/" 不是 payload，但会占 URL 长度
+  const room = SHARE_URL_HARD_LIMIT - base.length - 4;
+  const lower = estimateShareChars(board, display);
+  if (lower > room) return overPlan(lower + base.length + 4, true);
+  const payload = measureShareChars(board, display);
+  if (payload > room) return overPlan(payload + base.length + 4, false);
+  const url = base + "#/r/" + encodeBoard(board, display);
+  const info = shareLengthInfo(url);
+  return { status: "ready", url, chars: info.chars, kb: info.kb, state: info.state };
+}
+
+/** 异步版：给分享弹窗用，超过阈值时分片编码让出主线程 */
+export async function planShare(board: Board, display?: DisplaySettings, base = shareBase()): Promise<SharePlan> {
+  const room = SHARE_URL_HARD_LIMIT - base.length - 4;
+  const lower = estimateShareChars(board, display);
+  if (lower > room) return overPlan(lower + base.length + 4, true);
+  const payload = measureShareChars(board, display);
+  if (payload > room) return overPlan(payload + base.length + 4, false);
+  const encoded =
+    payload > SHARE_ASYNC_THRESHOLD ? await encodeBoardAsync(board, display) : encodeBoard(board, display);
+  const url = base + "#/r/" + encoded;
+  const info = shareLengthInfo(url);
+  return { status: "ready", url, chars: info.chars, kb: info.kb, state: info.state };
 }
 
 /**

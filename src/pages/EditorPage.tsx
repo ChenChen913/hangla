@@ -38,7 +38,7 @@ import {
 import { addImageFilesToPool } from "../lib/images";
 import { exportBoardRef } from "../lib/exportNode";
 import { TIER_PRESETS } from "../lib/presets";
-import { cn } from "../lib/utils";
+import { cn, BOARD_LIMITS } from "../lib/utils";
 
 export function EditorPage() {
   const exportRef = useRef<HTMLDivElement>(null);
@@ -125,7 +125,7 @@ export function EditorPage() {
   }, []);
 
   return (
-    <div className="mx-auto max-w-[1120px] px-4 pb-28 pt-7 md:px-5 md:pb-16">
+    <div className="mx-auto max-w-[1120px] px-4 pb-[calc(112px+env(safe-area-inset-bottom))] pt-6 md:px-5 md:pb-16 md:pt-7">
       <TitleBlock />
       <TierBoard />
       <button
@@ -141,8 +141,8 @@ export function EditorPage() {
           value={subtitle ?? ""}
           onChange={e => useBoard.getState().setSubtitle(e.target.value)}
           placeholder="添加一句说明（可选，会显示在预览页）"
-          maxLength={60}
-          className="w-full rounded-lg border border-dashed border-transparent bg-transparent px-3 py-1 text-center text-[13px] text-muted placeholder:text-muted/60 hover:border-line focus:border-accent focus:outline-none"
+          maxLength={BOARD_LIMITS.subtitle}
+          className="w-full rounded-lg border border-dashed border-transparent bg-transparent px-3 py-2 text-center text-[15px] text-muted placeholder:text-muted/60 hover:border-line focus:border-accent focus:outline-none sm:text-[13px]"
         />
         <p className="text-[12px] text-muted">
           {tiers.length} 档 · {tiers.reduce((a, t) => a + t.items.length, 0)} 个项目 · 项目库 {pool.length} 项 ·
@@ -151,7 +151,7 @@ export function EditorPage() {
       </div>
 
       {/* 移动端底部操作栏：第 4 项「设置」打开底部抽屉（桌面顶栏工具栏在手机上收进这里） */}
-      <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t border-line bg-panel/95 backdrop-blur md:hidden">
+      <nav className="bottom-nav fixed inset-x-0 bottom-0 z-40 flex border-t border-line bg-panel/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
         {[
           {
             label: "添加项目",
@@ -177,7 +177,7 @@ export function EditorPage() {
           <button
             key={label}
             onClick={onClick}
-            className="flex flex-1 cursor-pointer flex-col items-center gap-0.5 py-2.5 text-[11px] text-ink active:text-accent"
+            className="flex min-h-[56px] flex-1 cursor-pointer flex-col items-center justify-center gap-0.5 py-2 text-[11px] text-ink active:text-accent"
           >
             <Icon className="size-5" />
             {label}
@@ -198,7 +198,7 @@ export function EditorPage() {
               <DialogPrimitive.Title className="text-[15px] font-bold text-ink">设置</DialogPrimitive.Title>
               <DialogPrimitive.Close
                 aria-label="关闭设置"
-                className="grid size-8 cursor-pointer place-items-center rounded-full text-muted hover:bg-panel2 hover:text-ink"
+                className="grid size-10 cursor-pointer place-items-center rounded-full text-muted hover:bg-panel2 hover:text-ink md:size-8"
               >
                 <X className="size-4" />
               </DialogPrimitive.Close>
@@ -267,16 +267,26 @@ export function EditorPage() {
                 <button
                   type="button"
                   onClick={() => setConfirmReset(true)}
-                  className="inline-flex h-10 cursor-pointer items-center justify-center gap-1.5 rounded-[10px] border border-line bg-panel text-[13px] text-ink hover:border-accent/60 [&_svg]:size-4"
+                  className="inline-flex h-11 cursor-pointer items-center justify-center gap-1.5 rounded-[10px] border border-line bg-panel text-[13px] text-ink hover:border-accent/60 md:h-10 [&_svg]:size-4"
                 >
                   <RotateCcw /> 恢复示例
                 </button>
                 <button
                   type="button"
                   onClick={() => void exportBoardPng()}
-                  className="inline-flex h-10 cursor-pointer items-center justify-center gap-1.5 rounded-[10px] border border-transparent bg-gradient-to-br from-accent2 to-accent text-[13px] font-semibold text-white shadow-[0_2px_14px_rgba(255,106,61,.3)] hover:brightness-105 [&_svg]:size-4"
+                  className="inline-flex h-11 cursor-pointer items-center justify-center gap-1.5 rounded-[10px] border border-transparent bg-gradient-to-br from-accent2 to-accent text-[13px] font-semibold text-white shadow-[0_2px_14px_rgba(255,106,61,.3)] hover:brightness-105 md:h-10 [&_svg]:size-4"
                 >
                   <Download /> 导出 PNG
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHideNav(true);
+                    setSettingsOpen(false);
+                  }}
+                  className="col-span-2 inline-flex h-11 cursor-pointer items-center justify-center gap-1.5 rounded-[10px] border border-line bg-panel text-[13px] text-ink hover:border-accent/60 [&_svg]:size-4"
+                >
+                  <PanelTopClose /> 隐藏导航栏（全屏展示）
                 </button>
               </div>
             </div>
@@ -289,7 +299,9 @@ export function EditorPage() {
         onClick={() => setHideNav(v => !v)}
         title={hideNav ? "显示导航栏" : "隐藏导航栏（全屏排版）"}
         className={cn(
-          "fixed right-4 bottom-24 z-30 grid size-11 cursor-pointer place-items-center rounded-full border shadow-lg backdrop-blur transition-colors md:bottom-6",
+          "fixed right-4 bottom-[calc(96px+env(safe-area-inset-bottom))] z-30 size-11 cursor-pointer place-items-center rounded-full border shadow-lg backdrop-blur transition-colors md:bottom-6 md:grid",
+          // 手机上低频，收进设置抽屉；只有在"已隐藏导航栏"时才浮出来，作为恢复入口
+          hideNav ? "grid" : "hidden",
           hideNav
             ? "border-accent/60 bg-accent text-white hover:brightness-105"
             : "border-line bg-panel/95 text-ink hover:border-accent/60",

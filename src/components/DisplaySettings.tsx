@@ -21,14 +21,15 @@ function Toggle({
       aria-label={label}
       onClick={() => onChange(!checked)}
       className={cn(
-        "relative h-5 w-9 shrink-0 cursor-pointer rounded-full transition-colors",
+        // 手机上 48×28（接近 iOS 开关），桌面保持原来的 36×20
+        "relative h-7 w-12 shrink-0 cursor-pointer rounded-full transition-colors md:h-5 md:w-9",
         checked ? "bg-accent" : "bg-line",
       )}
     >
       <span
         className={cn(
-          "absolute top-0.5 size-4 rounded-full bg-white shadow transition-all",
-          checked ? "left-[18px]" : "left-0.5",
+          "absolute top-0.5 size-[22px] rounded-full bg-white shadow transition-all md:size-4",
+          checked ? "left-[24px] md:left-[18px]" : "left-0.5",
         )}
       />
     </button>
@@ -104,7 +105,7 @@ export function DisplaySettingsPanel({ className }: { className?: string }) {
                 aria-pressed={display.labelFont === f.v}
                 onClick={() => setDisplay({ labelFont: f.v })}
                 className={cn(
-                  "flex-1 cursor-pointer rounded-lg border px-1 py-1.5 text-[12px] transition-colors",
+                  "flex-1 cursor-pointer rounded-lg border px-1 py-2.5 text-[12px] transition-colors md:py-1.5",
                   display.labelFont === f.v
                     ? "border-accent bg-accent/10 font-semibold text-accent"
                     : "border-line bg-panel text-muted hover:border-accent/40 hover:text-ink",
@@ -133,7 +134,7 @@ export function DisplaySettingsPanel({ className }: { className?: string }) {
                 aria-pressed={display.labelAnim === a.v}
                 onClick={() => setDisplay({ labelAnim: a.v })}
                 className={cn(
-                  "flex-1 cursor-pointer rounded-lg border px-1 py-1.5 text-[12px] transition-colors",
+                  "flex-1 cursor-pointer rounded-lg border px-1 py-2.5 text-[12px] transition-colors md:py-1.5",
                   display.labelAnim === a.v
                     ? "border-accent bg-accent/10 font-semibold text-accent"
                     : "border-line bg-panel text-muted hover:border-accent/40 hover:text-ink",
@@ -168,7 +169,7 @@ export function DisplaySettingsPanel({ className }: { className?: string }) {
             value={display.tiltMax}
             aria-label="最大歪斜角度"
             onChange={e => setDisplay({ tiltMax: Number(e.target.value) })}
-            className="w-full cursor-pointer accent-[var(--c-accent)]"
+            className="w-full cursor-pointer py-1.5 accent-[var(--c-accent)]"
           />
           <p className="pt-1 text-[11px] text-muted">
             每张图在 ±{display.tiltMax}° 内随机；想单独调某张图，在编辑项目里设置
@@ -190,7 +191,7 @@ export function DisplaySettingsPanel({ className }: { className?: string }) {
             value={display.cardFontSize}
             aria-label="文字大小"
             onChange={e => setDisplay({ cardFontSize: Number(e.target.value) })}
-            className="w-full cursor-pointer accent-[var(--c-accent)]"
+            className="w-full cursor-pointer py-1.5 accent-[var(--c-accent)]"
           />
         </div>
 
@@ -207,7 +208,7 @@ export function DisplaySettingsPanel({ className }: { className?: string }) {
             value={display.cardImageSize}
             aria-label="图片大小"
             onChange={e => setDisplay({ cardImageSize: Number(e.target.value) })}
-            className="w-full cursor-pointer accent-[var(--c-accent)]"
+            className="w-full cursor-pointer py-1.5 accent-[var(--c-accent)]"
           />
         </div>
 
@@ -243,7 +244,7 @@ export function DisplaySettingsPanel({ className }: { className?: string }) {
                 aria-pressed={display.labelFlat === f.v}
                 onClick={() => setDisplay({ labelFlat: f.v })}
                 className={cn(
-                  "flex-1 cursor-pointer rounded-lg border px-1 py-1.5 text-[12px] transition-colors",
+                  "flex-1 cursor-pointer rounded-lg border px-1 py-2.5 text-[12px] transition-colors md:py-1.5",
                   display.labelFlat === f.v
                     ? "border-accent bg-accent/10 font-semibold text-accent"
                     : "border-line bg-panel text-muted hover:border-accent/40 hover:text-ink",
@@ -268,7 +269,7 @@ export function DisplaySettingsPanel({ className }: { className?: string }) {
             value={display.rowGap}
             aria-label="档位间距"
             onChange={e => setDisplay({ rowGap: Number(e.target.value) })}
-            className="w-full cursor-pointer accent-[var(--c-accent)]"
+            className="w-full cursor-pointer py-1.5 accent-[var(--c-accent)]"
           />
         </div>
 
@@ -283,7 +284,7 @@ export function DisplaySettingsPanel({ className }: { className?: string }) {
                 onClick={() => setDisplay({ cardFontWeight: w.value })}
                 style={{ fontWeight: w.value }}
                 className={cn(
-                  "flex-1 cursor-pointer rounded-lg border px-1 py-1.5 text-[12px] transition-colors",
+                  "flex-1 cursor-pointer rounded-lg border px-1 py-2.5 text-[12px] transition-colors md:py-1.5",
                   display.cardFontWeight === w.value
                     ? "border-accent bg-accent/10 text-accent"
                     : "border-line bg-panel text-muted hover:border-accent/40 hover:text-ink",

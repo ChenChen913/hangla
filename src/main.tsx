@@ -1,24 +1,12 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
-import { useBoard } from "./store/board";
+import { useBoard, STORAGE_KEY } from "./store/board";
+import { migrateLegacyBoard } from "./lib/legacy";
 import "./index.css";
 
-// v2（vanilla 版）存档迁移：hangla.state.v2 → hangla.v3
-(() => {
-  if (localStorage.getItem("hangla.v3")) return;
-  const legacy = localStorage.getItem("hangla.state.v2");
-  if (!legacy) return;
-  try {
-    const s = JSON.parse(legacy);
-    if (s && Array.isArray(s.tiers)) {
-      useBoard.getState().importBoard({ ...s, presetId: s.presetId ?? "custom" });
-      console.info("已从 v2 存档迁移榜单数据");
-    }
-  } catch {
-    /* 忽略损坏的旧档 */
-  }
-})();
+// v2（vanilla 版）存档迁移：逻辑在 lib/legacy.ts，存储不可用时安全跳过（不阻断启动）
+if (migrateLegacyBoard()) console.info("已从 v2 存档迁移榜单数据");
 
 // 旧版分享链接（#d=xxx）兼容 → 新路由 #/r/xxx
 if (location.hash.startsWith("#d=")) {
@@ -30,7 +18,7 @@ if (location.hash.startsWith("#d=")) {
 if (typeof window !== "undefined") {
   let syncTimer: ReturnType<typeof setTimeout> | null = null;
   window.addEventListener("storage", e => {
-    if (e.key !== "hangla.v3" && e.key !== "hangla.v3::images") return;
+    if (e.key !== STORAGE_KEY && e.key !== STORAGE_KEY + "::images") return;
     if (syncTimer !== null) clearTimeout(syncTimer);
     syncTimer = setTimeout(() => {
       syncTimer = null;
@@ -56,8 +44,14 @@ window.addEventListener("error", e => {
   box.textContent = (e.error && (e.error.stack || e.error.message)) || e.message || String(e.error);
 });
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-);
+const root = document.getElementById("root");
+if (root) {
+  createRoot(root).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  );
+} else {
+  // 理论上 index.html 一定有 #root；真被改坏了也要给出可读信息而不是空白页
+  document.body.textContent = "页面结构缺失：找不到 #root 挂载点。";
+}

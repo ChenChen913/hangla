@@ -78,19 +78,56 @@ html,
 body,
 #root {
   margin: 0;
+  /* 100vh 在移动浏览器里是「地址栏收起时」的高度，用它做下限会让页面多出一截空白；
+     支持的浏览器用 dvh 跟随动态视口，不支持的仍旧回落到 vh */
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
-/* 可拖拽条目：触摸拖拽时不让页面滚动抢走手势（dnd-kit PointerSensor 需要） */
-.chip-drag { touch-action: none; }
+/* iOS 软键盘不会收缩布局视口：App 会把「键盘遮住的高度」写进 --kb-inset，
+   底部抽屉据此整体抬到键盘上方；桌面 / 无键盘时恒为 0 */
+:root {
+  --kb-inset: 0px;
+}
 
-/* 触屏设备没有 hover：档位行工具条（上移/下移/换色/删除）与条目编辑/删除按钮常显，
-   否则手机上够不着；按钮触摸目标放大到 28×28 */
+/* 可拖拽条目：触摸时保留页面滚动能力。
+   拖拽本身由 TouchSensor 的「长按 220ms」启动，不能像 PointerSensor 那样
+   用 touch-action:none 从按下第一毫秒就锁死滚动——否则一屏全是卡片就没法上下滑了 */
+.chip-drag {
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+}
+
+/* 触屏设备没有 hover：不再把 26/28px 的小按钮常显在卡片和档位行上。
+   它们既盖住名字、又远小于可点区域标准；移动端改为「点卡片打开编辑弹窗」，
+   上移 / 下移 / 换档 / 删除都在弹窗里用 44px 按钮完成。 */
 @media (hover: none) {
-  .row-tools { opacity: 1; }
-  .chip-actions { display: flex; }
-  .chip-actions button { width: 28px; height: 28px; }
-  .chip-actions button svg { width: 14px; height: 14px; }
+  .row-tools,
+  .chip-actions {
+    display: none;
+  }
+}
+
+/* iOS Safari 会对字号 <16px 的输入框自动放大整个页面（焦点一进一出页面就错位）。
+   移动端统一按 16px 渲染；标题输入框本身是 26px，单独排除。
+   另外给 html 留出底部固定操作栏的滚动余量，聚焦输入框时不会被底栏盖住。 */
+@media (max-width: 767px), (pointer: coarse) {
+  /* 触屏设备（含 iPad）一律 16px：iOS 只按字号判断是否放大，不看屏宽 */
+  input:not(.title-input):not([type="range"]):not([type="color"]):not([type="checkbox"]):not([type="radio"]),
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 767px) {
+  html {
+    scroll-padding-bottom: calc(96px + env(safe-area-inset-bottom));
+  }
+  /* 软键盘弹出时让出固定底栏，避免它在 Android 上顶到输入框正上方 */
+  html[data-kb="1"] .bottom-nav {
+    display: none;
+  }
 }
 
 /* placeholder 跟随主题，避免暗色下输入框提示文字看不清 */
@@ -140,6 +177,39 @@ body {
   to { opacity: 1; transform: none; }
 }
 .sheet-panel[data-state="open"] { animation: sheet-up-in 0.18s ease-out; }
+
+/* 手机上的通用弹窗：不再把桌面居中框压进小屏，而是变成底部抽屉。
+   - 内容多时抽屉内部滚动（overscroll-contain 防止滚到底带动页面）
+   - 底部留安全区，Home 指示条不压住按钮
+   - 键盘弹出时用 --kb-inset 整体抬高（iOS 布局视口不收缩）
+   - 确认类弹窗同样适用：从底部出现更符合拇指操作 */
+@media (max-width: 639px) {
+  .dlg-content {
+    inset: auto 0 0 0;
+    bottom: var(--kb-inset, 0px);
+    margin: 0;
+    width: 100%;
+    max-width: none;
+    max-height: calc(92dvh - var(--kb-inset, 0px));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-radius: 20px 20px 0 0;
+    padding: 14px 16px calc(16px + env(safe-area-inset-bottom));
+  }
+  .dlg-content[data-state="open"] {
+    animation: sheet-up-in 0.2s ease-out;
+  }
+  /* 顶部小把手：让「这是可下滑的抽屉」这件事一眼可见 */
+  .dlg-content::before {
+    content: "";
+    display: block;
+    width: 36px;
+    height: 4px;
+    margin: -4px auto 10px;
+    border-radius: 999px;
+    background: var(--c-border);
+  }
+}
 
 /* 滚动条 */
 ::-webkit-scrollbar { width: 10px; height: 10px; }

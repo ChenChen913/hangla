@@ -15,3 +15,25 @@ export function resolveDropIndex(ids: string[], activeId: string, overId: string
   if (over === from) return from;
   return over < from ? over : over + 1;
 }
+
+export type ItemLocation = {
+  /** 档位 id，或项目库 "pool" */
+  container: "pool" | string;
+  /** 在所属容器里的下标 */
+  index: number;
+  /** 在 tiers 数组里的下标；项目库为 null */
+  tierIndex: number | null;
+};
+
+/** 条目当前在哪个容器、第几位（上移/下移与换档的按钮状态都靠它） */
+export function locateItem(
+  board: { tiers: Array<{ id: string; items: Array<{ id: string }> }>; pool: Array<{ id: string }> },
+  id: string,
+): ItemLocation | null {
+  for (let i = 0; i < board.tiers.length; i++) {
+    const index = board.tiers[i].items.findIndex(x => x.id === id);
+    if (index >= 0) return { container: board.tiers[i].id, index, tierIndex: i };
+  }
+  const index = board.pool.findIndex(x => x.id === id);
+  return index >= 0 ? { container: "pool", index, tierIndex: null } : null;
+}

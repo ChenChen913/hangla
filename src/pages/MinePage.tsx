@@ -6,7 +6,7 @@ import { useBoard } from "../store/board";
 import { toast } from "../store/toast";
 import { Button } from "../components/ui/button";
 import { ConfirmDialog } from "../components/ui/dialog";
-import { normalizeBoard, timestamp } from "../lib/utils";
+import { BOARD_LIMITS, timestamp } from "../lib/utils";
 
 export function MinePage() {
   const navigate = useNavigate();
@@ -45,6 +45,13 @@ export function MinePage() {
   }
 
   async function importJson(file: File) {
+    // 先看体积再读内容：一个 500MB 的 .json 被 file.text() 读进来，主线程会直接卡死。
+    // 正常榜单（含几十张图）也只有几 MB，8MB 足够宽松。
+    if (file.size > BOARD_LIMITS.importBytes) {
+      const mb = (n: number) => (n / 1024 / 1024).toFixed(1);
+      toast(`导入失败：文件 ${mb(file.size)}MB，超过 ${mb(BOARD_LIMITS.importBytes)}MB 上限`, 4500);
+      return;
+    }
     let text: string;
     try {
       text = await file.text();
@@ -63,21 +70,18 @@ export function MinePage() {
       toast("导入失败：这不是榜单 JSON（缺少 tiers 数组）", 4000);
       return;
     }
-    const board = normalizeBoard(parsed);
-    if (board.tiers.length === 0) {
-      toast("导入失败：榜单里没有任何有效档位", 4000);
-      return;
+    // 只存快照，不碰编辑器：失败不会覆盖任何东西，成功也不会改写正在编辑的榜单，
+    // 更不会在撤销栈里留下两条"导入→还原"的假历史
+    try {
+      const result = useBoard.getState().importBoardAsSnapshot(parsed);
+      if (!result.ok) {
+        toast(`导入失败：${result.reason}`, 4000);
+        return;
+      }
+      toast(`已导入「${result.title}」并保存为快照`, 3500);
+    } catch {
+      toast("导入失败：数据无法解析成榜单", 4000);
     }
-    // 借道编辑器状态把导入的榜单存成快照，再还原编辑器：
-    // 导入只进「我的排名」（可预览 / 手动恢复），不会悄悄覆盖正在编辑的榜单
-    const store = useBoard.getState();
-    const prev = currentBoard();
-    store.importBoard(board);
-    store.saveSnapshot();
-    // 直接写回旧状态而不是再走 importBoard：normalizeBoard 会套用体量上限，
-    // 编辑器里已有的超限数据（如手动加了三十多个档位）不该因为一次导入被截断
-    useBoard.setState(prev);
-    toast(`已导入「${board.title || "未命名榜单"}」并保存为快照`, 3500);
   }
 
   function onPickFile(e: ChangeEvent<HTMLInputElement>) {
@@ -88,7 +92,7 @@ export function MinePage() {
   }
 
   return (
-    <div className="mx-auto max-w-[1120px] px-5 pb-20 pt-10">
+    <div className="mx-auto max-w-[1120px] px-4 pb-16 pt-6 md:px-5 md:pb-20 md:pt-10">
       <div className="mb-8 text-center">
         <h1 className="inline-flex items-center gap-2 text-2xl font-extrabold">
           <Library className="size-6 text-accent" /> 我的排名
@@ -162,7 +166,11 @@ export function MinePage() {
         open={pendingRestore !== null}
         onOpenChange={open => !open && setPendingRestore(null)}
         title={`恢复到「${pendingRestore?.title ?? ""}」？`}
-        description="当前编辑器里的榜单会被这份快照覆盖（快照本身不受影响）。"
+        description={
+          pendingRestore?.display
+            ? "当前编辑器里的榜单会被这份快照覆盖，快照里保存的显示设置（字号、图片显隐、歪斜等）也会一并恢复（快照本身不受影响）。"
+            : "当前编辑器里的榜单会被这份快照覆盖（快照本身不受影响）；这份旧快照没有保存显示设置，本机显示设置保持不变。"
+        }
         confirmText="恢复"
         onConfirm={() => {
           if (!pendingRestore) return;

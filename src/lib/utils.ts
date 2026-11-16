@@ -100,18 +100,37 @@ export async function copyText(t: string): Promise<boolean> {
 }
 
 /* ---------- 导入/分享数据的体量与安全上限 ---------- */
-/** 旧结构 / 分享链接 / 导入 JSON 统一到 v4 时共用的硬上限 */
+/**
+ * 旧结构 / 分享链接 / 导入 JSON / 正常编辑统一使用的硬上限。
+ *
+ * 取值依据：编辑器标题框 maxLength 60 → 放宽到 120 容纳导入的旧榜单；
+ * 档位标签列固定 190px、字号 36px，16 个汉字已经要折 4 行，再长会撑破行高；
+ * 条目卡名称有 220px 省略号，60 足够；单档 200 条 / 30 档 / 项目库 500 是
+ * 「正常用户摸不到、极端数据又不会把页面拖死」的折中。
+ */
 export const BOARD_LIMITS = {
   /** decodeBoard 输入字符串的最大长度：再长就不像正常链接，直接拒绝解码 */
   decodeChars: 6_000_000,
-  /** 单张内联图片 data URL 的最大字符数 */
+  /** 单张内联图片 data URL 的最大字符数（640px JPEG 约 80KB，留足余量） */
   imageChars: 2_500_000,
   tiers: 30,
   itemsPerTier: 200,
   pool: 500,
+  /** 所有档位内的条目总数上限（不含项目库）：30×200=6000 张卡片会把 DOM 拖死 */
+  totalItems: 3_000,
   title: 120,
   subtitle: 80,
+  tierName: 16,
+  itemName: 60,
   desc: 200,
+  /** id 是内部标识，超过这个长度只可能是构造出来的垃圾数据 */
+  id: 64,
+  /** 单张图片允许的歪斜角度绝对值（与编辑弹窗的滑杆范围一致） */
+  tilt: 45,
+  /** 字体名是 CSS 值，限制长度避免异常长串进入 inline style */
+  cardFont: 120,
+  /** JSON 导入文件上限：正常榜单（含几十张图）不到 4MB */
+  importBytes: 8 * 1024 * 1024,
 } as const;
 
 /** 档位颜色非法时的兜底值（默认预设里的灰蓝） */
@@ -120,13 +139,13 @@ export const FALLBACK_TIER_COLOR = "#9AA5B1";
 /** 档位颜色白名单：只接受 #rgb / #rrggbb（大小写均可），挡住 url()、rgb()、命名色与注入串 */
 const HEX_COLOR_RE = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
 
-function safeTierColor(v: unknown): string {
+export function safeTierColor(v: unknown): string {
   return typeof v === "string" && HEX_COLOR_RE.test(v) ? v : FALLBACK_TIER_COLOR;
 }
 
-/** id 必须是非空字符串，纯空白按空处理 */
+/** id 必须是非空字符串，纯空白与异常长串按无效处理 */
 function safeId(v: unknown): string | null {
-  return typeof v === "string" && v.trim() !== "" ? v : null;
+  return typeof v === "string" && v.trim() !== "" && v.length <= BOARD_LIMITS.id ? v : null;
 }
 
 /** 同一份榜单里的 id 必须唯一：缺失/重复一律换成新的 uid() */
@@ -137,8 +156,80 @@ function uniqueId(candidate: string | null, seen: Set<string>): string {
   return id;
 }
 
-function truncate(v: string, max: number): string {
-  return v.length > max ? v.slice(0, max) : v;
+/**
+ * 按「字符」而不是 UTF-16 码元截断：直接 slice 会把 emoji 的代理对切成半个，
+ * 存进 JSON / 分享链接后变成乱码。
+ */
+export function truncateText(v: string, max: number): string {
+  if (v.length <= max) return v;
+  let out = "";
+  let n = 0;
+  for (const ch of v) {
+    if (n >= max) break;
+    out += ch;
+    n++;
+  }
+  return out;
+}
+
+function cleanText(v: unknown, max: number, fallback: string): string {
+  if (typeof v !== "string") return fallback;
+  const t = truncateText(v.trim(), max);
+  return t || fallback;
+}
+
+/* ---------- 显示设置规范化 ---------- */
+/** 与 store 初始值、DisplaySettings 面板的范围保持一致 */
+export const DEFAULT_DISPLAY: DisplaySettings = {
+  showImages: true,
+  showNames: true,
+  tiltImages: false,
+  tiltMax: 20,
+  cardFont: "",
+  cardFontSize: 15,
+  cardFontWeight: 500,
+  cardImageSize: 56,
+  labelFont: "standard",
+  labelAnim: "standard",
+  labelFlat: false,
+  rowGap: 12,
+};
+
+const FONT_WEIGHTS = [300, 400, 500, 700, 900];
+const LABEL_FONTS: DisplaySettings["labelFont"][] = ["standard", "artistic"];
+const LABEL_ANIMS: DisplaySettings["labelAnim"][] = ["off", "subtle", "standard", "strong"];
+
+/**
+ * 显示设置只影响渲染，但它来自存档 / 分享链接，必须当成不可信输入：
+ * 一个 tiltMax=1e9 或字号 -5 就足以让整页布局失控。
+ * 范围与 DisplaySettings 面板的滑杆 min/max 一致。
+ */
+export function normalizeDisplay(raw: unknown): DisplaySettings {
+  const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const num = (v: unknown, min: number, max: number, fallback: number) =>
+    typeof v === "number" && Number.isFinite(v) ? clamp(Math.round(v), min, max) : fallback;
+  const bool = (v: unknown, fallback: boolean) => (typeof v === "boolean" ? v : fallback);
+
+  return {
+    showImages: bool(r.showImages, DEFAULT_DISPLAY.showImages),
+    showNames: bool(r.showNames, DEFAULT_DISPLAY.showNames),
+    tiltImages: bool(r.tiltImages, DEFAULT_DISPLAY.tiltImages),
+    tiltMax: num(r.tiltMax, 5, 45, DEFAULT_DISPLAY.tiltMax),
+    cardFont: typeof r.cardFont === "string" ? truncateText(r.cardFont, BOARD_LIMITS.cardFont) : "",
+    cardFontSize: num(r.cardFontSize, 12, 24, DEFAULT_DISPLAY.cardFontSize),
+    cardFontWeight: FONT_WEIGHTS.includes(r.cardFontWeight as number)
+      ? (r.cardFontWeight as number)
+      : DEFAULT_DISPLAY.cardFontWeight,
+    cardImageSize: num(r.cardImageSize, 32, 96, DEFAULT_DISPLAY.cardImageSize),
+    labelFont: LABEL_FONTS.includes(r.labelFont as DisplaySettings["labelFont"])
+      ? (r.labelFont as DisplaySettings["labelFont"])
+      : DEFAULT_DISPLAY.labelFont,
+    labelAnim: LABEL_ANIMS.includes(r.labelAnim as DisplaySettings["labelAnim"])
+      ? (r.labelAnim as DisplaySettings["labelAnim"])
+      : DEFAULT_DISPLAY.labelAnim,
+    labelFlat: bool(r.labelFlat, DEFAULT_DISPLAY.labelFlat),
+    rowGap: num(r.rowGap, 0, 32, DEFAULT_DISPLAY.rowGap),
+  };
 }
 
 /* ---------- 榜单数据规范化（新旧结构统一到 v4） ---------- */
@@ -148,22 +239,28 @@ export function normalizeItem(raw: unknown): Item {
   const id = safeId(r.id) ?? uid();
   // v2/v3 旧结构必须先判：{type:"text",text} | {type:"image",src,name}。
   // 旧图片条目同样带 name，如果先走下面的现代分支，就会因为读不到 r.image 而把图片丢掉。
-  if (r.type === "text") return { id, name: String(r.text ?? "") };
+  if (r.type === "text") return { id, name: cleanText(r.text, BOARD_LIMITS.itemName, "未命名") };
   if (r.type === "image") {
     return {
       id,
-      name: typeof r.name === "string" && r.name ? r.name : "图片",
+      name: cleanText(r.name, BOARD_LIMITS.itemName, "图片"),
       image: isSafeImage(r.src) ? r.src : undefined,
     };
   }
-  if (typeof r.name === "string") {
+
+  const image = isSafeImage(r.image) ? r.image : undefined;
+  if (typeof r.name === "string" || image) {
     return {
       id,
-      name: r.name,
-      desc: typeof r.desc === "string" && r.desc ? truncate(r.desc, BOARD_LIMITS.desc) : undefined,
+      name: cleanText(r.name, BOARD_LIMITS.itemName, image ? "图片" : "未命名"),
+      desc: typeof r.desc === "string" && r.desc.trim() ? truncateText(r.desc.trim(), BOARD_LIMITS.desc) : undefined,
       // 只放行内联图片：分享链接里的外链图片会让打开者去请求第三方地址（暴露 IP / 可用于追踪）
-      image: isSafeImage(r.image) ? r.image : undefined,
-      tilt: typeof r.tilt === "number" ? r.tilt : undefined,
+      image,
+      // NaN / Infinity / 1e9 度都会让 transform 失效或把卡片甩出屏幕
+      tilt:
+        typeof r.tilt === "number" && Number.isFinite(r.tilt)
+          ? clamp(Math.round(r.tilt), -BOARD_LIMITS.tilt, BOARD_LIMITS.tilt)
+          : undefined,
     };
   }
   return { id, name: "未命名" };
@@ -178,19 +275,32 @@ export function normalizeBoard(raw: unknown): Board {
   // tier / item / pool 共用一套 seenIds：store 里 moveItem 按 item id 跨档位和项目库查找，
   // 分享数据里的重复 id 会让两个条目被同时选中，所以重复的必须重新生成
   const seenIds = new Set<string>();
-  const normalizeItems = (value: unknown, max: number): Item[] =>
-    (Array.isArray(value) ? value : [])
-      .slice(0, max)
+  // 档位内条目总数单独设预算：每档 200 条 × 30 档仍然可能把 6000 张卡片塞进 DOM
+  let tierBudget = BOARD_LIMITS.totalItems;
+  const normalizeItems = (value: unknown, max: number, budget?: { left: number }): Item[] => {
+    const list = Array.isArray(value) ? value : [];
+    const cap = Math.min(max, budget ? Math.max(0, budget.left) : max);
+    const out = list
+      .slice(0, cap)
       .map(normalizeItem)
       .map(item => ({ ...item, id: uniqueId(item.id, seenIds) }));
+    if (budget) budget.left -= out.length;
+    return out;
+  };
 
   const tiers = (Array.isArray(r.tiers) ? r.tiers : []).slice(0, BOARD_LIMITS.tiers).map(rawTier => {
     const t = rawTier && typeof rawTier === "object" ? (rawTier as Record<string, unknown>) : {};
+    // 先占档位 id，再处理条目：分享数据里 tier 与 item 可能撞 id，
+    // 保持「先出现者保留原 id」的顺序，避免整份数据重新洗牌
+    const id = uniqueId(safeId(t.id), seenIds);
+    const budget = { left: tierBudget };
+    const items = normalizeItems(t.items, BOARD_LIMITS.itemsPerTier, budget);
+    tierBudget = budget.left;
     return {
-      id: uniqueId(safeId(t.id), seenIds),
-      name: String(t.name ?? "档位"),
+      id,
+      name: cleanText(t.name, BOARD_LIMITS.tierName, "档位"),
       color: safeTierColor(t.color),
-      items: normalizeItems(t.items, BOARD_LIMITS.itemsPerTier),
+      items,
     };
   });
   // 旧 theme 字符串 → 风格 + 日夜两维度
@@ -214,8 +324,8 @@ export function normalizeBoard(raw: unknown): Board {
   const title = typeof r.title === "string" ? r.title : "";
   const subtitle = typeof r.subtitle === "string" ? r.subtitle : "";
   return {
-    title: truncate(title, BOARD_LIMITS.title),
-    subtitle: subtitle ? truncate(subtitle, BOARD_LIMITS.subtitle) : undefined,
+    title: truncateText(title, BOARD_LIMITS.title),
+    subtitle: subtitle ? truncateText(subtitle, BOARD_LIMITS.subtitle) : undefined,
     style,
     mode,
     presetId,
@@ -237,33 +347,170 @@ export function itemAngle(item: Item, display: DisplaySettings): number {
 }
 
 /* ---------- 分享链接编解码（UTF-8 安全 Base64URL） ---------- */
-export function encodeBoard(b: Board): string {
-  const bytes = new TextEncoder().encode(JSON.stringify(b));
+function toBase64Url(bytes: Uint8Array): string {
+  // 逐字节 `bin += fromCharCode(x)` 在 MB 级数据上会产生大量中间字符串，
+  // 按 32KB 分块拼接，既快又不爆栈
+  const CHUNK = 0x8000;
   let bin = "";
-  bytes.forEach(x => (bin += String.fromCharCode(x)));
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    bin += String.fromCharCode(...bytes.subarray(i, Math.min(i + CHUNK, bytes.length)));
+  }
   return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
-export function decodeBoard(s: string): Board | null {
+
+function fromBase64Url(input: string): Uint8Array {
+  let s = input.replace(/-/g, "+").replace(/_/g, "/");
+  while (s.length % 4) s += "=";
+  const bin = atob(s);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+/** 分享数据：display 可选（旧链接没有），顶层字段与 Board 兼容，旧版本打开也不会崩 */
+function sharePayload(b: Board, display?: DisplaySettings) {
+  return display ? { ...b, display } : b;
+}
+
+export function encodeBoard(b: Board, display?: DisplaySettings): string {
+  return toBase64Url(new TextEncoder().encode(JSON.stringify(sharePayload(b, display))));
+}
+
+/**
+ * 大榜单异步编码：每 8 个分块让出一次事件循环，避免一次 base64 把主线程按死。
+ * 小于阈值时直接用同步版本（多一次 await 反而更慢）。
+ */
+export async function encodeBoardAsync(b: Board, display?: DisplaySettings): Promise<string> {
+  const json = JSON.stringify(sharePayload(b, display));
+  const bytes = new TextEncoder().encode(json);
+  const CHUNK = 0x8000;
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    bin += String.fromCharCode(...bytes.subarray(i, Math.min(i + CHUNK, bytes.length)));
+    if (i % (CHUNK * 8) === 0) await new Promise(r => setTimeout(r, 0));
+  }
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+/** JSON 文本的 UTF-8 字节数（不分配 Buffer，逐码元计算） */
+function utf8Bytes(s: string): number {
+  let bytes = 0;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c < 0x80) bytes += 1;
+    else if (c < 0x800) bytes += 2;
+    else if (c >= 0xd800 && c <= 0xdbff) {
+      const next = s.charCodeAt(i + 1);
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        bytes += 4;
+        i++;
+      } else {
+        // 孤立代理会被 JSON.stringify 转义成 \uXXXX（6 个 ASCII 字符）
+        bytes += 6;
+      }
+    } else if (c >= 0xdc00 && c <= 0xdfff) bytes += 6;
+    else bytes += 3;
+  }
+  return bytes;
+}
+
+/** base64 字符数（去掉 padding，与 encodeBoard 的输出长度一致） */
+function base64Chars(bytes: number): number {
+  const full = Math.floor(bytes / 3);
+  const rest = bytes % 3;
+  return full * 4 + (rest === 0 ? 0 : rest === 1 ? 2 : 3);
+}
+
+/**
+ * 分享链接体量下界（不序列化、不编码）：把所有字符串长度当作 UTF-8 字节数的最小值。
+ * 用来在 JSON.stringify 之前就把「明显超硬上限」的数据挡掉。
+ */
+export function estimateShareChars(b: Board, display?: DisplaySettings): number {
+  let chars = 0;
+  const walk = (v: unknown) => {
+    if (typeof v === "string") {
+      chars += v.length;
+      return;
+    }
+    if (Array.isArray(v)) {
+      for (const x of v) walk(x);
+      return;
+    }
+    if (v && typeof v === "object") for (const x of Object.values(v)) walk(x);
+  };
+  walk(sharePayload(b, display));
+  return Math.floor(chars / 3) * 4;
+}
+
+/**
+ * 分享 payload 的精确字符数（只做 JSON.stringify + 字节计数，**不做 base64**）。
+ * 分享弹窗用它先判断是否超限，超限就根本不生成链接。
+ */
+export function measureShareChars(b: Board, display?: DisplaySettings): number {
+  return base64Chars(utf8Bytes(JSON.stringify(sharePayload(b, display))));
+}
+
+export type SharedBoard = { board: Board; display: DisplaySettings | null };
+
+/** 解码分享链接；旧链接没有 display，返回 null 表示「沿用打开者本机设置」 */
+export function decodeSharedBoard(s: string): SharedBoard | null {
   // 先卡长度：几 MB 的 base64 解码 + JSON.parse 足以卡住主线程，超限直接当坏链接
   if (typeof s !== "string" || s.length > BOARD_LIMITS.decodeChars) return null;
   try {
-    s = s.replace(/-/g, "+").replace(/_/g, "/");
-    while (s.length % 4) s += "=";
-    const bin = atob(s);
-    const o = JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, ch => ch.charCodeAt(0))));
-    if (!o || !Array.isArray(o.tiers)) return null;
-    return normalizeBoard(o);
+    const json = new TextDecoder().decode(fromBase64Url(s));
+    const o = JSON.parse(json) as Record<string, unknown> | null;
+    if (!o || typeof o !== "object" || !Array.isArray(o.tiers)) return null;
+    return {
+      board: normalizeBoard(o),
+      display: o.display == null ? null : normalizeDisplay(o.display),
+    };
   } catch {
     return null;
   }
 }
 
+/** 只要榜单、不关心显示设置的调用方（测试 / 旧代码） */
+export function decodeBoard(s: string): Board | null {
+  return decodeSharedBoard(s)?.board ?? null;
+}
+
 /* ---------- 图片：读文件 + 重编码 ---------- */
+/**
+ * 读成 data URL。
+ *
+ * 关键点：FileReader 的三个回调都必须落到 Promise 上。之前只写了 onload，
+ * 读失败（权限 / 文件被移走 / 磁盘错误）或用户取消时 Promise 永远 pending，
+ * 批量处理的 `for await` 会卡在那张图上，后面的图片和整个批次都不会结束。
+ */
 export function readFileAsDataURL(file: File): Promise<string> {
-  return new Promise(res => {
-    const r = new FileReader();
-    r.onload = () => res(String(r.result));
-    r.readAsDataURL(file);
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    const cleanup = () => {
+      reader.onload = null;
+      reader.onerror = null;
+      reader.onabort = null;
+    };
+    reader.onload = () => {
+      const result = reader.result;
+      cleanup();
+      if (typeof result === "string" && result) resolve(result);
+      else reject(new Error("图片读取结果为空"));
+    };
+    reader.onerror = () => {
+      const err = reader.error;
+      cleanup();
+      reject(err instanceof Error ? err : new Error("图片读取失败"));
+    };
+    reader.onabort = () => {
+      cleanup();
+      reject(new Error("图片读取已取消"));
+    };
+    try {
+      reader.readAsDataURL(file);
+    } catch (error) {
+      cleanup();
+      reject(error instanceof Error ? error : new Error("图片读取失败"));
+    }
   });
 }
 
@@ -281,8 +528,16 @@ export function dataUrlBytes(url: string): number {
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error("图片解码失败"));
+    img.onload = () => {
+      img.onload = null;
+      img.onerror = null;
+      resolve(img);
+    };
+    img.onerror = () => {
+      img.onload = null;
+      img.onerror = null;
+      reject(new Error("图片解码失败"));
+    };
     img.src = src;
   });
 }
@@ -302,6 +557,7 @@ function hasAlpha(ctx: CanvasRenderingContext2D, w: number, h: number): boolean 
  *
  * 两条保底：重编码比原图大时保留原图（小图标不会被"压大"）；解码失败原样返回（不丢东西）。
  * 注意：小于 max 的原图也会重新编码，否则一张 600×600 的 2MB 截图会被原样塞进存档。
+ * 比例始终保留（w/h 同乘一个 k），非方形图不会被裁成方形。
  */
 export async function encodeImage(dataUrl: string, max = IMAGE_MAX_SIDE): Promise<string> {
   try {

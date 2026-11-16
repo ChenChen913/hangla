@@ -156,12 +156,16 @@ export function TopBar() {
   const presetOptions = buildPresetOptions(presetId);
 
   return (
-    <header className="topbar sticky top-0 z-50 border-b border-line bg-bg/85 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-[1400px] flex-wrap items-center justify-between gap-3 px-5 py-2.5">
-        {/* 品牌 + 导航 */}
-        <div className="flex min-w-0 items-center gap-4">
-          <button onClick={() => navigate("/")} className="flex cursor-pointer items-center gap-2.5">
-            <span className="grid h-[34px] w-[34px] place-items-center rounded-[10px] bg-gradient-to-br from-accent2 to-accent text-[15px] font-extrabold text-white shadow-[0_2px_12px_rgba(255,106,61,.35)]">
+    <header className="topbar sticky top-0 z-50 border-b border-line bg-bg/85 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
+      <div className="mx-auto flex max-w-[1400px] flex-nowrap items-center justify-between gap-2 px-3 py-1.5 md:flex-wrap md:gap-3 md:px-5 md:py-2.5">
+        {/* 品牌 + 导航：手机上必须一行放下（320px 也不许把「编辑器」拆成两行） */}
+        <div className="flex min-w-0 items-center gap-2 md:gap-4">
+          <button
+            onClick={() => navigate("/")}
+            aria-label="夯拉榜首页"
+            className="-mx-1 -my-1 flex shrink-0 cursor-pointer items-center gap-2.5 px-1 py-1"
+          >
+            <span className="grid h-8 w-8 place-items-center rounded-[10px] bg-gradient-to-br from-accent2 to-accent text-[14px] font-extrabold text-white shadow-[0_2px_12px_rgba(255,106,61,.35)] md:h-[34px] md:w-[34px] md:text-[15px]">
               夯
             </span>
             <span className="hidden flex-col leading-tight sm:flex">
@@ -169,14 +173,14 @@ export function TopBar() {
               <span className="text-[9.5px] tracking-[0.18em] text-muted">HANGLA TIER LIST</span>
             </span>
           </button>
-          <nav className="flex items-center gap-1">
+          <nav className="flex items-center gap-0.5 md:gap-1">
             {NAV.map(({ to, label, icon: Icon }) => (
               <NavLink
                 key={to}
                 to={to}
                 className={({ isActive }) =>
                   cn(
-                    "inline-flex items-center gap-1.5 rounded-[10px] border border-transparent px-3 py-2 text-[13.5px] text-muted transition-colors hover:bg-panel2 hover:text-ink [&_svg]:size-4",
+                    "inline-flex h-11 items-center gap-1 whitespace-nowrap rounded-[10px] border border-transparent px-1.5 text-[12.5px] text-muted transition-colors hover:bg-panel2 hover:text-ink md:h-auto md:gap-1.5 md:px-3 md:py-2 md:text-[13.5px] [&_svg]:size-4 [&_svg]:shrink-0",
                     isActive && "border-line bg-panel2 font-semibold text-ink",
                   )
                 }

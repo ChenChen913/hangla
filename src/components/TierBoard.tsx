@@ -2,7 +2,8 @@ import {
   DndContext,
   DragOverlay,
   KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   pointerWithin,
   rectIntersection,
   useSensor,
@@ -48,9 +49,12 @@ export function TierBoard() {
   const tiers = useBoard(s => s.tiers);
   const rowGap = useBoard(s => s.display.rowGap);
   const [activeItem, setActiveItem] = useState<Item | null>(null);
-  // 指针拖拽 + 键盘拖拽（Tab 聚焦条目后空格抓起、方向键移动、再空格放下）
+  // 鼠标：移动 6px 就抓起（保持桌面原有手感）。
+  // 触摸：长按 220ms 才抓起，容差 8px——手指落下先滚动页面时会取消拖拽，
+  // 不会出现"想滑页面却把卡片拖走"；长按成功后有触觉/视觉反馈（DragOverlay）。
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
