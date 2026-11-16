@@ -5,6 +5,7 @@
 > 交付：PR #1（`quality/device-release-hardening`）已合并为 `21ff5e4`，应用代码提交 `cfdb640`
 > 环境：Windows 11、Node `24.18.1`、npm `11.12.1`、Google Chrome `157.0.8103.52`（headless）
 > 版本：`package.json` 仍是 `1.4.1`，本轮没有为了发版而升版本号
+> 交付状态：Cloudflare 自动部署已启用并验证；两站线上主 JS 均为 `index-PrOmxocu.js`。
 > 说明：本文只写实际执行 / 实际读取到的内容；真机未测的部分在 §4 明确标注。
 
 ---
@@ -177,11 +178,14 @@
 |---|---|---|
 | PR #1 push | `43867696029` | `check` / `build` / `browser` 通过；部署类 Job 跳过 |
 | PR #1 pull_request | `43867722956` | 同上；**验证了 pull_request 工作流** |
-| main merge push | `43868173565` | `check` / `build` / `browser` / `cloudflare-disabled` 通过；`deploy-cloudflare` / `smoke` 跳过 |
-| GitHub Pages | `43868173655` | build + deploy 成功 |
+| main merge push | `43868173565` | `check` / `build` / `browser` / `cloudflare-disabled` 通过；当时自动部署未启用 |
+| 配置 Secrets 后重跑 main | `43870168356` | `check` / `build` / `browser` / `deploy-cloudflare` / `smoke` **全部通过** |
+| Cloudflare 首次自动部署 | `677fb02c` | 源提交 `36069a4`，生产地址更新成功 |
+| GitHub Pages | `43870168544` | build + deploy 成功 |
 
-**当前没有 GitHub Secrets**：`gh secret list` 为空，因此自动部署未启用；
-`CF_DEPLOY_ENABLED` 也未设置。`cloudflare-disabled` 只发提示，不假装部署成功。
+**自动部署已启用并实际验证**：`CLOUDFLARE_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`、
+`CF_DEPLOY_ENABLED=true` 已配置；重跑 main CI 后 `deploy-cloudflare` 与 `smoke`
+不再跳过，均通过。
 
 ---
 
@@ -194,18 +198,17 @@
 | 应用版本 | `1.4.1` |
 | 本轮应用代码合并提交 | `21ff5e4`（PR #1 合并，应用代码提交 `cfdb640`） |
 | 本地构建主 JS | `assets/index-PrOmxocu.js`（633.56 kB） |
-| Cloudflare 最新 Production | `cb245a0c-1d52-479d-aae2-2a8a271907d2`，源提交 `21ff5e4` |
+| Cloudflare 首次自动部署（应用代码 `36069a4`） | `677fb02c-c13f-4c9c-bcdd-b7a31ae033d0` |
 | Cloudflare 线上主 JS | `assets/index-PrOmxocu.js` |
-| GitHub Pages 应用代码部署 | run `43868173655`，成功，提交 `21ff5e4` |
+| GitHub Pages 最近部署 | run `43870168544`，成功，提交 `36069a4` |
 | GitHub Pages 线上主 JS | `assets/index-PrOmxocu.js` |
-| 本轮应用代码 CI | run `43868173565`，成功，提交 `21ff5e4` |
+| 最近 CI | run `43870168356`，成功（含 `deploy-cloudflare` 与 `smoke`），提交 `36069a4` |
 | 线上冒烟 | `live-check` **14/14**，含主 JS 一致性 |
 
-- 本报告与后续文档提交只会改变仓库 HEAD，不改变 app 产物；浏览器可复核线上主 JS
-  是否仍为 `index-PrOmxocu.js`。
 - 两站现在都包含本轮应用代码（`cfdb640`）；合并提交 `21ff5e4` 只是 PR merge。
-- 本轮之后如果只改文档，线上主 JS 不应变化；`release:info` 会把"仓库 HEAD"与
-  "最近应用代码提交"分开展示，避免把文档提交误认为新应用版本。
+- 自动部署已验证：main 重跑后 Cloudflare 首次自动部署为 `677fb02c`，源提交 `36069a4`。
+- 之后如果只改文档，自动部署仍会运行，但线上主 JS 不变；`release:info` 会把
+  "仓库 HEAD"与"最近应用代码提交"分开展示，避免把文档提交误认为新应用版本。
 - Cloudflare 的部署 ID 仍需 `wrangler pages deployment list` 读取；`release:info`
   不强制依赖 wrangler 登录，所以文档里保留人工快照。
 
@@ -215,8 +218,8 @@
 
 1. **真机未验证**：iPhone / Android / 微信 / 支付宝 / 飞书 / 钉钉 / QQ 的真实保存行为
    需要按 §4 清单执行；模拟层通过不等于真机通过。
-2. **Cloudflare 自动部署未启用**：仓库没有 Secrets，也没有 `CF_DEPLOY_ENABLED`。
-   当前只验证了工作流结构与 PR / main 的跳过行为，没有验证"真实部署 + smoke"路径。
+2. **Cloudflare Token 在聊天中暴露过**：自动部署功能已验证可用，但建议在 Cloudflare
+   轮换一次 Token，并把新值更新到 GitHub Secret；不轮换也能继续工作，只是要接受风险。
 3. **Canvas / OOM 无法在 CI 里稳定注入**：目前是单元测试覆盖空 Blob 与错误分类，
    没有真实设备的内存压力测试。
 4. **未知 WebView 的残留风险**：没有 `; wv)`、也不在已知 App 名单里的第三方 WebView，
@@ -233,9 +236,9 @@
 
 ## 11. 需要人工执行的操作
 
-### 11.1 配置 Cloudflare 自动部署（可选但推荐）
+### 11.1 Cloudflare 自动部署（已配置）
 
-在 GitHub 仓库配置：
+2026-11-16 已配置：
 
 ```sh
 gh secret set CLOUDFLARE_API_TOKEN    # 权限至少 Pages:Edit
@@ -243,9 +246,11 @@ gh secret set CLOUDFLARE_ACCOUNT_ID   # Cloudflare Account ID
 gh variable set CF_DEPLOY_ENABLED --body true
 ```
 
-可选：Settings → Environments → `production` 配置 Required reviewers。
-配置后，下一次 main push 会走"质量检查 → 构建 → 部署 → 线上冒烟"，PR 仍然不会部署。
-未配置时不要期待自动部署；`cloudflare-disabled` 的 warning 不是发布成功。
+并重跑 main CI（run `43870168356`）验证：`deploy-cloudflare` 与 `smoke` 均通过，
+Cloudflare 首次自动部署为 `677fb02c`（源 `36069a4`）。
+
+后续 main push 会自动部署；PR 仍然不会部署。可选：Settings → Environments → `production`
+配置 Required reviewers。若 Token 在聊天中暴露过，建议轮换后更新 Secret。
 
 ### 11.2 真机验收
 
@@ -273,6 +278,8 @@ gh variable set CF_DEPLOY_ENABLED --body true
 - QQ / QQBrowser 判定不再互相误伤；支付宝 / 飞书 / 钉钉 / QQ 有回归测试。
 - 空 Blob、Canvas / OOM / toBlob 异常有明确提示，不再留下"生成中"或空图。
 - `live-check` 能校验线上主 JS 与构建一致；Cloudflare 部署工作流有 SHA 校验与冒烟 Job。
+- Cloudflare 自动部署已实际跑通：run `43870168356` 的 `deploy-cloudflare` 与 `smoke` 通过，
+  首次自动部署 `677fb02c` 源提交 `36069a4`。
 - 发布事实有 `release:info` 统一入口；PR #1 的 push 与 pull_request 工作流都实际跑通。
 
 ### 只在模拟环境验证
@@ -289,12 +296,11 @@ gh variable set CF_DEPLOY_ENABLED --body true
 - Android Chrome 的下载目录与 JSON 导入导出。
 - 真实设备上的长榜单导出、软键盘、安全区与横屏底部栏。
 
-### 需要人工配置权限 / Secrets
+### 需要你人工处理的事项
 
-- `CLOUDFLARE_API_TOKEN`
-- `CLOUDFLARE_ACCOUNT_ID`
-- 仓库变量 `CF_DEPLOY_ENABLED=true`（以及可选的 `production` 环境审批）
+- **真机测试**：按 `docs/mobile-real-device-checklist.md` 执行并填写。
+- **可选安全操作**：Cloudflare Token 在聊天中暴露过，建议轮换后更新 GitHub Secret；
+  不轮换也能继续自动部署，但风险由你承担。
+- **可选审批**：如果希望生产部署前人工确认，配置 `production` Environment 的 Required reviewers。
 
-在这些配置完成前，自动部署保持关闭；GitHub Pages 仍会随 push 自动发布，
-Cloudflare 需要手动 `npm run deploy:cf`。当前两站已手动同步到 `index-PrOmxocu.js`，
-但这不等于"自动部署已启用"。
+自动部署本身已启用并验证通过，两站均已同步到 `index-PrOmxocu.js`，不需要再重复配置。

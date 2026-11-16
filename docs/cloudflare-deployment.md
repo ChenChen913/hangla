@@ -11,9 +11,9 @@
 | Cloudflare 项目名 | `hangla` |
 | 生产地址 | **https://hangla-9bk.pages.dev/** |
 | 部署方式 | Direct Upload（`wrangler pages deploy`），**没有接 Git 集成** |
-| 最近部署 | **2026-11-16**，源提交 `21ff5e4`（真机兼容与发布流程），部署 ID `cb245a0c` |
+| 最近一次应用代码自动部署 | **2026-11-16**，源提交 `36069a4`，部署 ID `677fb02c`（首次自动部署成功） |
 | 当前仓库版本 | `1.4.1`（含 v1.3 存储加固、v1.4 移动端改造与本轮真机兼容加固） |
-| 状态 | **已更新**：线上主 JS `index-PrOmxocu.js`，与仓库 `21ff5e4` 的本地构建一致；HTTP 200，`live:check` 14/14 通过 |
+| 状态 | **自动部署已启用**：线上主 JS `index-PrOmxocu.js`，与本地构建一致；`live:check` 14/14 通过。文档提交也会触发部署，但主 JS 不变 |
 | 备用站 | https://chenchen913.github.io/hangla/（GitHub Pages，push 自动发布） |
 
 ### 重要：不要写成 `hangla.pages.dev`
@@ -128,15 +128,13 @@ npm run mobile:check    # 9 视口布局 + 触屏交互门禁（关键项失败�
 | 线上冒烟 | `npm run live:check` **12/12** |
 | GitHub Pages | run `43864182304` 成功，同为 `index-CtwJsM2z.js` |
 
-### 3.6 GitHub Actions 自动部署（默认关闭）
+### 3.6 GitHub Actions 自动部署（当前已启用）
 
-`.github/workflows/ci.yml` 已包含 `deploy-cloudflare` 与 `smoke` 两个 Job，但**默认不启用**：
-
-- 只有 `push` 到 `main` 才会考虑部署，PR 永远不会部署生产环境。
-- 必须先通过 `check`（单测 + 文档）、`build`（双构建）与 `browser`（桌面 + 移动端）。
-- 部署前校验 `dist-web/deploy-meta.json` 的 commit SHA 等于当前 `GITHUB_SHA`，防止误用旧产物。
-- 部署后 `smoke` 运行 `live-check`，并用 `EXPECT_ASSET` 校验线上主 JS 与本次构建一致。
-- 部署失败或冒烟失败都会让工作流失败，不会显示发布成功。
+`.github/workflows/ci.yml` 已包含 `deploy-cloudflare` 与 `smoke` 两个 Job。
+2026-11-16 已配置 `CLOUDFLARE_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID` 与
+`CF_DEPLOY_ENABLED=true`，并重跑 main CI（run `43870168356`）验证：
+`deploy-cloudflare` 与 `smoke` 均通过，首次自动部署 ID 为 `677fb02c`。
+以后只有 `main` push 才会部署，PR 仍然不会部署生产环境。
 
 启用需要两项 GitHub Secrets 与一个仓库变量：
 
@@ -178,7 +176,7 @@ Required reviewers。手动部署与回滚方式不变，见 §3.2 / §4。
 | 生产地址 | https://hangla-9bk.pages.dev/ ，HTTP 200 |
 | 线上冒烟 | `EXPECT_ASSET=index-PrOmxocu.js npm run live:check` **14/14** |
 | GitHub Pages | 应用代码部署 run `43868173655` 成功，同为 `index-PrOmxocu.js` |
-| 自动部署 | 未启用：仓库尚无 `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`，`CF_DEPLOY_ENABLED` 也未设置 |
+| 自动部署 | **已启用**：`CLOUDFLARE_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`、`CF_DEPLOY_ENABLED=true` 已配置；首次自动部署 `677fb02c`，`deploy-cloudflare` 与 `smoke` 均通过 |
 
 ## 4. 回滚
 
