@@ -1,21 +1,25 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   MAX_EXPORT_AREA,
   MAX_EXPORT_SIDE,
+  MIN_EXPORT_PIXEL_RATIO,
   exportFileName,
-  exportPixelRatio,
+  exportSizeProblem,
   isInAppBrowser,
   isIosLike,
   pickSaveChannel,
+  planExportSize,
+  planSaveUi,
+  shareBlob,
   withTimeout,
 } from "./saveImage";
 
 /**
- * 手机端导出的平台判定。
+ * 手机端导出的平台判定与画布边界。
  *
- * 这些分支没法在 CI 里跑真机，但它们是"导出没反应"这件事的根因所在：
+ * 这些分支没法在 CI 里跑真机，但它们是"导出没反应 / 导出一张白图"的根因所在：
  * iOS 的异步 `a.click()` 会被静默拦截、微信内置浏览器直接忽略 download，
- * 所以判定逻辑必须单测钉死，改坏了要立刻红。
+ * 长榜单会超过 iOS 的位图上限。判定与尺寸规划必须单测钉死，改坏了要立刻红。
  */
 const IPHONE =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
@@ -28,6 +32,22 @@ const WECHAT_ANDROID = ANDROID + " MicroMessenger/8.0.49";
 const WINDOWS =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 const MAC = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
+
+/** 所有"成功"的尺寸规划都必须满足的硬约束 */
+function expectWithinLimits(plan: ReturnType<typeof planExportSize>) {
+  expect(plan.ok).toBe(true);
+  if (!plan.ok) return;
+  expect(plan.ratio).toBeGreaterThanOrEqual(MIN_EXPORT_PIXEL_RATIO);
+  expect(plan.width).toBeLessThanOrEqual(MAX_EXPORT_SIDE);
+  expect(plan.height).toBeLessThanOrEqual(MAX_EXPORT_SIDE);
+  expect(plan.width * plan.height).toBeLessThanOrEqual(MAX_EXPORT_AREA);
+  expect(plan.width).toBe(Math.floor(plan.width));
+  expect(plan.height).toBe(Math.floor(plan.height));
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("设备判定", () => {
   it("认得 iPhone / iPad", () => {
@@ -73,38 +93,216 @@ describe("保存通道", () => {
   });
 });
 
-describe("导出画布尺寸", () => {
-  it("正常榜单按 2 倍渲染", () => {
-    expect(exportPixelRatio(1200, 780)).toBe(2);
+describe("保存面板入口规划", () => {
+  it("Windows Chrome：直接下载是主入口，不展示不可用的系统分享", () => {
+    const plan = planSaveUi({ userAgent: WINDOWS, supportsDownload: true, supportsShareFiles: false });
+    expect(plan).toEqual({
+      channel: "download",
+      primary: "download",
+      showDownload: true,
+      showShare: false,
+      showLongPressHint: false,
+    });
   });
 
-  it("长榜单自动降到 iOS 单边上限以内", () => {
-    const ratio = exportPixelRatio(1200, 2892);
-    expect(ratio).toBeLessThan(2);
-    expect(1200 * ratio).toBeLessThanOrEqual(MAX_EXPORT_SIDE);
-    expect(2892 * ratio).toBeLessThanOrEqual(MAX_EXPORT_SIDE);
+  it("Android Chrome：保留直接下载；支持文件分享时多给一个次要入口", () => {
+    const plain = planSaveUi({ userAgent: ANDROID, maxTouchPoints: 5, supportsDownload: true });
+    expect(plain.primary).toBe("download");
+    expect(plain.showDownload).toBe(true);
+
+    const withShare = planSaveUi({
+      userAgent: ANDROID,
+      maxTouchPoints: 5,
+      supportsDownload: true,
+      supportsShareFiles: true,
+    });
+    expect(withShare.primary).toBe("download");
+    expect(withShare.showShare).toBe(true);
   });
 
-  it("任何尺寸都不超过单边与面积上限", () => {
-    for (const [w, h] of [
-      [1200, 1],
-      [1200, 780],
-      [1200, 2892],
-      [1200, 8000],
-      [1200, 20000],
-    ]) {
-      const ratio = exportPixelRatio(w, h);
-      expect(w * ratio).toBeLessThanOrEqual(MAX_EXPORT_SIDE + 0.5);
-      expect(h * ratio).toBeLessThanOrEqual(MAX_EXPORT_SIDE + 0.5);
-      expect(w * ratio * h * ratio).toBeLessThanOrEqual(MAX_EXPORT_AREA + 1);
-      expect(ratio).toBeGreaterThan(0);
+  it("iPhone Safari：系统分享优先，绝不展示直接下载", () => {
+    const withShare = planSaveUi({
+      userAgent: IPHONE,
+      maxTouchPoints: 5,
+      supportsDownload: true,
+      supportsShareFiles: true,
+    });
+    expect(withShare.primary).toBe("share");
+    expect(withShare.showShare).toBe(true);
+    expect(withShare.showDownload).toBe(false);
+    expect(withShare.showLongPressHint).toBe(true);
+
+    const noShare = planSaveUi({
+      userAgent: IPHONE,
+      maxTouchPoints: 5,
+      supportsDownload: true,
+      supportsShareFiles: false,
+    });
+    expect(noShare.primary).toBe("longpress");
+    expect(noShare.showDownload).toBe(false);
+    expect(noShare.showShare).toBe(false);
+    expect(noShare.showLongPressHint).toBe(true);
+  });
+
+  it("iPadOS 桌面 UA：靠触点数判断为 iOS，不走直接下载", () => {
+    const plan = planSaveUi({
+      userAgent: IPAD_DESKTOP_UA,
+      maxTouchPoints: 5,
+      supportsDownload: true,
+      supportsShareFiles: true,
+    });
+    expect(plan.channel).toBe("sheet");
+    expect(plan.primary).toBe("share");
+    expect(plan.showDownload).toBe(false);
+  });
+
+  it("微信 iOS / Android：只提供长按保存，即便浏览器声称支持分享与下载", () => {
+    for (const ua of [WECHAT_IOS, WECHAT_ANDROID]) {
+      const plan = planSaveUi({
+        userAgent: ua,
+        maxTouchPoints: 5,
+        supportsDownload: true,
+        supportsShareFiles: true,
+      });
+      expect(plan.channel).toBe("sheet");
+      expect(plan.primary).toBe("longpress");
+      expect(plan.showDownload).toBe(false);
+      expect(plan.showShare).toBe(false);
+      expect(plan.showLongPressHint).toBe(true);
     }
   });
 
-  it("尺寸异常时兜底 1 倍，不产生 NaN / 负值", () => {
-    expect(exportPixelRatio(0, 0)).toBe(1);
-    expect(exportPixelRatio(Number.NaN, 100)).toBe(1);
-    expect(exportPixelRatio(1200, -5)).toBe(1);
+  it("浏览器没有 download 能力时：有分享用分享，没有分享只能长按", () => {
+    const share = planSaveUi({ userAgent: WINDOWS, supportsDownload: false, supportsShareFiles: true });
+    expect(share.primary).toBe("share");
+    expect(share.showDownload).toBe(false);
+
+    const none = planSaveUi({ userAgent: WINDOWS, supportsDownload: false, supportsShareFiles: false });
+    expect(none.primary).toBe("longpress");
+    expect(none.showDownload).toBe(false);
+    expect(none.showShare).toBe(false);
+  });
+
+  it("iOS / 内置浏览器的任何组合都不会把直接下载当主入口", () => {
+    for (const ua of [IPHONE, IPAD_DESKTOP_UA, WECHAT_IOS, WECHAT_ANDROID]) {
+      for (const supportsDownload of [true, false]) {
+        for (const supportsShareFiles of [true, false]) {
+          const plan = planSaveUi({ userAgent: ua, maxTouchPoints: 5, supportsDownload, supportsShareFiles });
+          expect(plan.primary).not.toBe("download");
+          expect(plan.showDownload).toBe(false);
+        }
+      }
+    }
+  });
+});
+
+describe("导出画布尺寸", () => {
+  it("普通榜单按 2 倍渲染，清晰度不降", () => {
+    const plan = planExportSize(1200, 780);
+    expect(plan).toEqual({ ok: true, ratio: 2, width: 2400, height: 1560 });
+  });
+
+  it("27 档长榜单自动降到 iOS 单边上限以内", () => {
+    const plan = planExportSize(1200, 2892);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    expect(plan.ratio).toBeLessThan(2);
+    expect(plan.ratio).toBe(1.41);
+    expect(plan.width).toBe(1692);
+    expect(plan.height).toBe(4077);
+    expectWithinLimits(plan);
+  });
+
+  it("30 档榜单仍然完整且不越界", () => {
+    expectWithinLimits(planExportSize(1200, 3210));
+  });
+
+  it("接近最大条目数的榜单：降低像素比但不越界", () => {
+    expectWithinLimits(planExportSize(1200, 12000));
+  });
+
+  it("高度 40000px 的极端画布：0.1 倍仍可安全导出", () => {
+    const plan = planExportSize(1200, 40000);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    expect(plan.ratio).toBe(0.1);
+    expect(plan.height).toBe(4000);
+    expectWithinLimits(plan);
+  });
+
+  it("高度 100000px 的极端画布：拒绝导出，而不是把 0.04 抬回 0.1 后越界", () => {
+    const plan = planExportSize(1200, 100000);
+    expect(plan.ok).toBe(false);
+    if (plan.ok) return;
+    expect(plan.reason).toBe("too-large");
+    expect(plan.safeRatio).toBeLessThan(MIN_EXPORT_PIXEL_RATIO);
+  });
+
+  it("面积上限生效时也不越界（6000×6000）", () => {
+    const plan = planExportSize(6000, 6000);
+    expectWithinLimits(plan);
+    if (plan.ok) expect(plan.width * plan.height).toBeLessThanOrEqual(MAX_EXPORT_AREA);
+  });
+
+  it("任何成功生成的尺寸都不超过单边与面积上限", () => {
+    const sizes: Array<[number, number]> = [
+      [1200, 1],
+      [1200, 780],
+      [1200, 2892],
+      [1200, 3210],
+      [1200, 8000],
+      [1200, 20000],
+      [1200, 40000],
+      [1200, 40960],
+      [2400, 4000],
+      [4096, 4096],
+      [6000, 6000],
+      [10000, 1000],
+    ];
+    for (const [w, h] of sizes) expectWithinLimits(planExportSize(w, h));
+  });
+
+  it("非法尺寸、0、负数、NaN、Infinity 一律拒绝，不产生 NaN / 负值", () => {
+    for (const [w, h] of [
+      [0, 0],
+      [0, 780],
+      [1200, 0],
+      [-1, 780],
+      [1200, -5],
+      [Number.NaN, 100],
+      [1200, Number.NaN],
+      [Number.POSITIVE_INFINITY, 100],
+      [1200, Number.POSITIVE_INFINITY],
+      [Number.NEGATIVE_INFINITY, 100],
+    ]) {
+      const plan = planExportSize(w, h);
+      expect(plan.ok).toBe(false);
+      if (!plan.ok) expect(plan.reason).toBe("invalid-size");
+    }
+  });
+
+  it("preferred 非法时退回 2 倍，而不是产生 NaN / 0", () => {
+    for (const preferred of [Number.NaN, 0, -2, Number.NEGATIVE_INFINITY]) {
+      const plan = planExportSize(1200, 780, preferred);
+      expect(plan).toEqual({ ok: true, ratio: 2, width: 2400, height: 1560 });
+    }
+  });
+
+  it("拒绝导出时给出可执行的明确提示，而不是静默返回空白图", () => {
+    const tooLarge = planExportSize(1200, 100000);
+    expect(tooLarge.ok).toBe(false);
+    if (!tooLarge.ok) {
+      expect(tooLarge.reason).toBe("too-large");
+      expect(exportSizeProblem(tooLarge)).toContain("太长");
+      expect(exportSizeProblem(tooLarge)).toContain("删掉");
+    }
+
+    const invalid = planExportSize(0, 0);
+    expect(invalid.ok).toBe(false);
+    if (!invalid.ok) {
+      expect(invalid.reason).toBe("invalid-size");
+      expect(exportSizeProblem(invalid)).toContain("刷新页面");
+    }
   });
 });
 
@@ -113,6 +311,48 @@ describe("文件名", () => {
     expect(exportFileName("AI/模型: 排名?", "20260101-120000")).toBe("20260101-120000-AI模型 排名-排行榜.png");
     expect(exportFileName("", "20260101-120000")).toBe("20260101-120000-从夯到拉-排行榜.png");
     expect(exportFileName("///", "20260101-120000")).toBe("20260101-120000-从夯到拉-排行榜.png");
+  });
+});
+
+describe("系统分享", () => {
+  const blob = () => new Blob(["png"], { type: "image/png" });
+
+  it("分享成功返回 shared", async () => {
+    const share = vi.fn(async () => undefined);
+    vi.stubGlobal("navigator", { share, canShare: () => true });
+    await expect(shareBlob(blob(), "a.png", "排行榜")).resolves.toBe("shared");
+    expect(share).toHaveBeenCalledTimes(1);
+  });
+
+  it("用户取消返回 cancelled，不当作失败", async () => {
+    const cancel = Object.assign(new Error("cancelled"), { name: "AbortError" });
+    vi.stubGlobal("navigator", {
+      share: async () => {
+        throw cancel;
+      },
+      canShare: () => true,
+    });
+    await expect(shareBlob(blob(), "a.png")).resolves.toBe("cancelled");
+  });
+
+  it("浏览器没有 share API 时返回 unsupported", async () => {
+    vi.stubGlobal("navigator", {});
+    await expect(shareBlob(blob(), "a.png")).resolves.toBe("unsupported");
+  });
+
+  it("有 share 但 canShare 拒绝文件时返回 unsupported", async () => {
+    vi.stubGlobal("navigator", { share: async () => undefined, canShare: () => false });
+    await expect(shareBlob(blob(), "a.png")).resolves.toBe("unsupported");
+  });
+
+  it("其它异常也返回 unsupported，不会误报成功", async () => {
+    vi.stubGlobal("navigator", {
+      share: async () => {
+        throw new Error("not allowed");
+      },
+      canShare: () => true,
+    });
+    await expect(shareBlob(blob(), "a.png")).resolves.toBe("unsupported");
   });
 });
 

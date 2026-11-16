@@ -142,7 +142,7 @@ export function EditorPage() {
           onChange={e => useBoard.getState().setSubtitle(e.target.value)}
           placeholder="添加一句说明（可选，会显示在预览页）"
           maxLength={BOARD_LIMITS.subtitle}
-          className="w-full rounded-lg border border-dashed border-transparent bg-transparent px-3 py-2 text-center text-[15px] text-muted placeholder:text-muted/60 hover:border-line focus:border-accent focus:outline-none sm:text-[13px]"
+          className="min-h-11 w-full rounded-lg border border-dashed border-transparent bg-transparent px-3 py-2 text-center text-[15px] text-muted placeholder:text-muted/60 hover:border-line focus:border-accent focus:outline-none sm:text-[13px]"
         />
         <p className="text-[12px] text-muted">
           {tiers.length} 档 · {tiers.reduce((a, t) => a + t.items.length, 0)} 个项目 · 项目库 {pool.length} 项 ·
@@ -198,7 +198,7 @@ export function EditorPage() {
               <DialogPrimitive.Title className="text-[15px] font-bold text-ink">设置</DialogPrimitive.Title>
               <DialogPrimitive.Close
                 aria-label="关闭设置"
-                className="grid size-10 cursor-pointer place-items-center rounded-full text-muted hover:bg-panel2 hover:text-ink md:size-8"
+                className="grid size-11 cursor-pointer place-items-center rounded-full text-muted hover:bg-panel2 hover:text-ink md:size-8"
               >
                 <X className="size-4" />
               </DialogPrimitive.Close>
@@ -233,7 +233,7 @@ export function EditorPage() {
                       onClick={toggleMode}
                       title={mode === "day" ? "切换到黑夜配色" : "切换到白天配色"}
                       aria-label={mode === "day" ? "切换到黑夜配色" : "切换到白天配色"}
-                      className="inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-[10px] border border-line bg-panel text-ink hover:border-accent/60 [&_svg]:size-4"
+                      className="inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-[10px] border border-line bg-panel text-ink hover:border-accent/60 [&_svg]:size-4"
                     >
                       {mode === "day" ? <Moon /> : <Sun />}
                     </button>
@@ -252,7 +252,7 @@ export function EditorPage() {
                   type="button"
                   onClick={() => useBoard.getState().undo()}
                   disabled={!past}
-                  className="inline-flex h-10 cursor-pointer items-center justify-center gap-1.5 rounded-[10px] border border-line bg-panel text-[13px] text-ink hover:border-accent/60 disabled:cursor-not-allowed disabled:opacity-40 [&_svg]:size-4"
+                  className="inline-flex h-11 cursor-pointer items-center justify-center gap-1.5 rounded-[10px] border border-line bg-panel text-[13px] text-ink hover:border-accent/60 disabled:cursor-not-allowed disabled:opacity-40 [&_svg]:size-4"
                 >
                   <Undo2 /> 撤销
                 </button>
@@ -260,7 +260,7 @@ export function EditorPage() {
                   type="button"
                   onClick={() => useBoard.getState().redo()}
                   disabled={!future}
-                  className="inline-flex h-10 cursor-pointer items-center justify-center gap-1.5 rounded-[10px] border border-line bg-panel text-[13px] text-ink hover:border-accent/60 disabled:cursor-not-allowed disabled:opacity-40 [&_svg]:size-4"
+                  className="inline-flex h-11 cursor-pointer items-center justify-center gap-1.5 rounded-[10px] border border-line bg-panel text-[13px] text-ink hover:border-accent/60 disabled:cursor-not-allowed disabled:opacity-40 [&_svg]:size-4"
                 >
                   <Redo2 /> 重做
                 </button>

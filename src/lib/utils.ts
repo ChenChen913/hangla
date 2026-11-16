@@ -555,15 +555,17 @@ function hasAlpha(ctx: CanvasRenderingContext2D, w: number, h: number): boolean 
  * - 无透明通道 → JPEG q0.85（同样一张 640×480 照片，PNG 811KB、JPEG 84KB，差 9.7 倍，
  *   而 localStorage 只有 5MB 左右，用 PNG 存照片第 7 张就写不进去了）
  *
- * 两条保底：重编码比原图大时保留原图（小图标不会被"压大"）；解码失败原样返回（不丢东西）。
+ * 两条保底：重编码比原图大时保留原图（小图标不会被"压大"）；
+ * **解码失败必须抛错**——上传的坏图不能以"原样返回"的形式进项目库，
+ * 否则界面里会出现一张永远加载不出来的破图，存档也会白占空间。
  * 注意：小于 max 的原图也会重新编码，否则一张 600×600 的 2MB 截图会被原样塞进存档。
  * 比例始终保留（w/h 同乘一个 k），非方形图不会被裁成方形。
  */
 export async function encodeImage(dataUrl: string, max = IMAGE_MAX_SIDE): Promise<string> {
+  const img = await loadImage(dataUrl);
   try {
-    const img = await loadImage(dataUrl);
     const side = Math.max(img.naturalWidth, img.naturalHeight);
-    if (!side || !img.naturalWidth) return dataUrl;
+    if (!side || !img.naturalWidth) throw new Error("图片尺寸为 0");
     const k = Math.min(1, max / side);
     const w = Math.max(1, Math.round(img.naturalWidth * k));
     const h = Math.max(1, Math.round(img.naturalHeight * k));
@@ -575,7 +577,9 @@ export async function encodeImage(dataUrl: string, max = IMAGE_MAX_SIDE): Promis
     ctx.drawImage(img, 0, 0, w, h);
     const next = hasAlpha(ctx, w, h) ? canvas.toDataURL("image/png") : canvas.toDataURL("image/jpeg", 0.85);
     return next.length < dataUrl.length ? next : dataUrl;
-  } catch {
+  } catch (error) {
+    // 解码成功但重编码失败：保留原图，至少用户还能看到图
+    if ((error as Error)?.message === "图片尺寸为 0") throw error;
     return dataUrl;
   }
 }

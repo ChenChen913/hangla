@@ -14,7 +14,15 @@ import { PresetSwitchDialog } from "./PresetSwitchDialog";
 import { FancySelect, type FancyOption } from "./FancySelect";
 import { DisplaySettings } from "./DisplaySettings";
 import { exportBoardRef } from "../lib/exportNode";
-import { currentSaveChannel, downloadBlob, exportFileName, exportPixelRatio, withTimeout } from "../lib/saveImage";
+import {
+  currentSaveEnvironment,
+  downloadBlob,
+  exportFileName,
+  exportSizeProblem,
+  planExportSize,
+  planSaveUi,
+  withTimeout,
+} from "../lib/saveImage";
 
 const NAV = [
   { to: "/", label: "编辑器", icon: PencilLine },
@@ -132,12 +140,18 @@ export async function exportBoardPng() {
     );
     const s = useBoard.getState();
     const pal = exportPalette(s.style, s.mode);
-    // 画布按设备上限自适应：长榜单按 2 倍会超过 iOS 单边 4096，得到一张空白图
+    // 画布按设备上限自适应：长榜单按 2 倍会超过 iOS 单边 4096，得到一张空白图。
+    // 量不出高度时不要用 `|| 1` 猜一个——那会生成一张几乎空白的图，直接按尺寸异常拒绝。
     const width = node.clientWidth || 1200;
-    const height = node.clientHeight || 1;
+    const height = node.clientHeight;
+    const sizePlan = planExportSize(width, height);
+    if (!sizePlan.ok) {
+      toast(exportSizeProblem(sizePlan), 6000);
+      return;
+    }
     const blob = await withTimeout(
       toBlob(node, {
-        pixelRatio: exportPixelRatio(width, height),
+        pixelRatio: sizePlan.ratio,
         backgroundColor: pal.pageBg,
         // 只有「艺术」档位标签用得到得意黑（1.1MB 的网络字体）。
         // 不嵌字体时省下约 1.5MB 的 base64，手机导出明显更稳、更快；系统字体本来就能直接渲染
@@ -146,14 +160,15 @@ export async function exportBoardPng() {
       30_000,
       "生成图片超时，图太多太大时先删掉几张再试",
     );
-    if (!blob) throw new Error("画布生成失败，可能是图片过大");
+    if (!blob || blob.size === 0) throw new Error("画布生成失败，可能是图片过大");
     const filename = exportFileName(s.title, timestamp());
 
     // 桌面 / Android 浏览器直接下载；iOS 与微信等内置浏览器改成先出预览面板。
     // （原因见 lib/saveImage.ts 顶部注释：await 之后 a.click() 在 iOS 会被静默拦截）
-    if (currentSaveChannel() === "download") {
+    const savePlan = planSaveUi(currentSaveEnvironment());
+    if (savePlan.channel === "download") {
       downloadBlob(blob, filename);
-      toast("已导出 PNG，去下载目录看看");
+      toast("已开始下载，请在下载目录查看");
       return;
     }
     useUi.getState().setPendingImage({ url: URL.createObjectURL(blob), blob, filename });
@@ -192,7 +207,8 @@ export function TopBar() {
           <button
             onClick={() => navigate("/")}
             aria-label="夯拉榜首页"
-            className="-mx-1 -my-1 flex shrink-0 cursor-pointer items-center gap-2.5 px-1 py-1"
+            data-touch-compact="品牌首页入口：高 44px，宽度 40px；紧邻的导航项均为 44px"
+            className="-mx-1 -my-1.5 flex shrink-0 cursor-pointer items-center gap-2.5 px-1 py-1.5"
           >
             <span className="grid h-8 w-8 place-items-center rounded-[10px] bg-gradient-to-br from-accent2 to-accent text-[14px] font-extrabold text-white shadow-[0_2px_12px_rgba(255,106,61,.35)] md:h-[34px] md:w-[34px] md:text-[15px]">
               夯

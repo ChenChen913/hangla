@@ -8,6 +8,7 @@ export function Toaster() {
       role="status"
       aria-live="polite"
       aria-atomic="true"
+      data-toast-root
       className="pointer-events-none fixed bottom-[calc(96px+env(safe-area-inset-bottom))] left-1/2 z-[70] flex -translate-x-1/2 flex-col items-center gap-2 md:bottom-6"
     >
       <AnimatePresence>

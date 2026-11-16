@@ -8,6 +8,7 @@ permissions:
   contents: read
 
 jobs:
+  # 单元测试与文档事实，不需要浏览器
   check:
     runs-on: ubuntu-latest
     steps:
@@ -19,5 +20,54 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run docs:check
+
+  # 双构建只做一次，产物交给浏览器 Job 复用
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
       - run: npm run build
       - run: npm run build:web
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-web
+          path: dist-web
+          retention-days: 3
+
+  # 真实 Chrome 回归：桌面与移动端共用同一次安装 / 同一份产物，不重复构建
+  browser:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist-web
+          path: dist-web
+      - name: 安装中文字体
+        run: sudo apt-get update && sudo apt-get install -y fonts-noto-cjk
+      - name: 确认 Chrome 可用
+        run: |
+          CHROME_BIN="$(command -v google-chrome || command -v google-chrome-stable || true)"
+          if [ -z "$CHROME_BIN" ]; then
+            echo "::error::CI 环境里找不到 Chrome。浏览器检查不能跳过，也不能假装成功。"
+            exit 1
+          fi
+          echo "CHROME_PATH=$CHROME_BIN" >> "$GITHUB_ENV"
+          "$CHROME_BIN" --version
+      - name: 桌面浏览器回归
+        run: npm run browser:check
+      # mobile:check 默认就是失败门禁：布局、触控尺寸、触屏交互任一关键项失败即退出 1
+      - name: 移动端布局与触屏交互门禁
+        run: npm run mobile:check

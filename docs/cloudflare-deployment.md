@@ -11,9 +11,9 @@
 | Cloudflare 项目名 | `hangla` |
 | 生产地址 | **https://hangla-9bk.pages.dev/** |
 | 部署方式 | Direct Upload（`wrangler pages deploy`），**没有接 Git 集成** |
-| 最近部署 | **2026-11-16**，源提交 `2fbab8c`（v1.4.1），部署 ID `6335258f` |
+| 最近部署 | **2026-11-16**，源提交 `1fb5dbb`（v1.4.1），部署 ID `66b74539` |
 | 当前仓库版本 | `1.4.1`（含 v1.3 存储加固、v1.4 移动端改造） |
-| 状态 | **已更新**：线上产物与仓库 `2fbab8c` 一致，HTTP 200，缓存头与安全头生效，`live:check` 12/12 通过 |
+| 状态 | **已更新**：线上产物与仓库 `1fb5dbb` 一致，HTTP 200，缓存头与安全头生效，`live:check` 12/12 通过；本轮移动端质量加固改动仍在工作区，尚未提交 / 部署 |
 | 备用站 | https://chenchen913.github.io/hangla/（GitHub Pages，push 自动发布） |
 
 ### 重要：不要写成 `hangla.pages.dev`
@@ -85,7 +85,7 @@ npm run live:check
 
 # 5) 本地可重复的完整检查
 npm run browser:check   # 桌面 34 项
-npm run mobile:check    # 9 视口 + 44 项触屏交互
+npm run mobile:check    # 9 视口布局 + 触屏交互门禁（关键项失败退出非 0）
 ```
 
 ### 3.4 本次部署记录（2026-11-16）
@@ -107,6 +107,11 @@ npm run mobile:check    # 9 视口 + 44 项触屏交互
 | 线上冒烟 | `npm run live:check` **12/12**：桌面/手机无横向溢出、底部栏 4 项贴底、触屏点卡片开全宽抽屉、存储被禁不白屏且有常驻提示、`#/mine` 深链接直达、无未捕获异常 |
 
 > `wrangler pages deployment list --project-name hangla` 可随时核对，最新一条应是 Production / `main`。
+>
+> 2026-11-16 后续又部署了 `c327090`（保存面板修复）与 `1fb5dbb`（导出超时保护）；
+> 截至本轮检查，最新 Production 为 `1fb5dbb` / 部署 ID `66b74539`，线上主 JS 为 `index-S3QYH0ri.js`，
+> 与仓库 `1fb5dbb` 的本地构建一致。本轮质量加固改动仍在工作区，**没有部署**；
+> 提交并走完验收后，需人工执行 `npm run deploy:cf` 再核对。
 
 ## 4. 回滚
 

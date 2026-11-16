@@ -7,7 +7,7 @@ import { toast } from "../store/toast";
 import { Button } from "../components/ui/button";
 import { ConfirmDialog } from "../components/ui/dialog";
 import { BOARD_LIMITS, timestamp } from "../lib/utils";
-import { currentSaveChannel, downloadBlob, shareBlob } from "../lib/saveImage";
+import { currentSaveEnvironment, downloadBlob, planSaveUi, shareBlob } from "../lib/saveImage";
 
 export function MinePage() {
   const navigate = useNavigate();
@@ -34,21 +34,29 @@ export function MinePage() {
     const board = currentBoard();
     const blob = new Blob([JSON.stringify(board, null, 2)], { type: "application/json" });
     const filename = `hangla-board-${timestamp()}.json`;
-    // 与 PNG 导出同一套平台判断：iOS 的 a[download] 不可靠，改走系统分享（存到「文件」）
-    if (currentSaveChannel() === "download") {
-      downloadBlob(blob, filename);
-      toast("已导出榜单 JSON");
+    // 与 PNG 导出同一套平台判断：iOS 的 a[download] 不可靠，改走系统分享（存到「文件」）；
+    // 内置浏览器两者都不可靠时明确说明，不能提示"已导出"却什么都没发生
+    const savePlan = planSaveUi(currentSaveEnvironment());
+    if (savePlan.primary === "download") {
+      try {
+        downloadBlob(blob, filename);
+        toast("已开始下载，请在下载目录查看");
+      } catch {
+        toast("下载没有启动，请在系统浏览器中打开本页再导出", 4800);
+      }
+      return;
+    }
+    if (!savePlan.showShare) {
+      toast("当前浏览器不支持导出 JSON，请在 Safari / Chrome 等系统浏览器中打开", 5200);
       return;
     }
     void shareBlob(blob, filename, "榜单 JSON").then(result => {
       if (result === "shared") {
-        toast("已打开系统分享，存到「文件」即可");
+        toast("已交给系统，存到「文件」即可");
         return;
       }
       if (result === "cancelled") return;
-      // 内置浏览器没有系统分享：再试一次下载，成不成至少给了明确反馈
-      downloadBlob(blob, filename);
-      toast("已开始下载，去「文件 / 下载」里看看", 4000);
+      toast("系统分享不可用，请在系统浏览器中打开本页再导出", 4800);
     });
   }
 

@@ -103,6 +103,7 @@ export function DisplaySettingsPanel({ className }: { className?: string }) {
                 key={f.v}
                 type="button"
                 aria-pressed={display.labelFont === f.v}
+                data-touch-compact="分段选项：等宽排列、间距充足，高度 40px"
                 onClick={() => setDisplay({ labelFont: f.v })}
                 className={cn(
                   "flex-1 cursor-pointer rounded-lg border px-1 py-2.5 text-[12px] transition-colors md:py-1.5",
@@ -132,6 +133,7 @@ export function DisplaySettingsPanel({ className }: { className?: string }) {
                 key={a.v}
                 type="button"
                 aria-pressed={display.labelAnim === a.v}
+                data-touch-compact="分段选项：等宽排列、间距充足，高度 40px"
                 onClick={() => setDisplay({ labelAnim: a.v })}
                 className={cn(
                   "flex-1 cursor-pointer rounded-lg border px-1 py-2.5 text-[12px] transition-colors md:py-1.5",
@@ -242,6 +244,7 @@ export function DisplaySettingsPanel({ className }: { className?: string }) {
                 key={f.label}
                 type="button"
                 aria-pressed={display.labelFlat === f.v}
+                data-touch-compact="分段选项：等宽排列、间距充足，高度 40px"
                 onClick={() => setDisplay({ labelFlat: f.v })}
                 className={cn(
                   "flex-1 cursor-pointer rounded-lg border px-1 py-2.5 text-[12px] transition-colors md:py-1.5",
@@ -281,6 +284,7 @@ export function DisplaySettingsPanel({ className }: { className?: string }) {
                 key={w.value}
                 type="button"
                 aria-pressed={display.cardFontWeight === w.value}
+                data-touch-compact="分段选项：等宽排列、间距充足，高度 40px"
                 onClick={() => setDisplay({ cardFontWeight: w.value })}
                 style={{ fontWeight: w.value }}
                 className={cn(

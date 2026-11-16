@@ -40,16 +40,16 @@ export function Pool() {
               onChange={e => setQuery(e.target.value)}
               placeholder="搜索项目…"
               aria-label="搜索项目"
-              className="h-10 w-full rounded-[10px] border border-line bg-panel2 pl-8 pr-2 text-xs text-ink outline-none focus:border-accent md:h-8"
+              className="h-11 w-full rounded-[10px] border border-line bg-panel2 pl-8 pr-2 text-xs text-ink outline-none focus:border-accent md:h-8"
             />
           </div>
           <button
             onClick={() => openItemDialog()}
-            className="inline-flex h-10 shrink-0 cursor-pointer items-center gap-1 rounded-[10px] border border-line bg-panel px-2.5 text-xs font-medium text-ink hover:border-accent/60 hover:text-accent md:h-8 [&_svg]:size-3.5"
+            className="inline-flex h-11 shrink-0 cursor-pointer items-center gap-1 rounded-[10px] border border-line bg-panel px-2.5 text-xs font-medium text-ink hover:border-accent/60 hover:text-accent md:h-8 [&_svg]:size-3.5"
           >
             <Plus /> 添加项目
           </button>
-          <label className="inline-flex h-10 shrink-0 cursor-pointer items-center gap-1 rounded-[10px] border border-line bg-panel px-2.5 text-xs text-ink hover:border-accent/60 md:h-8 [&_svg]:size-3.5">
+          <label className="inline-flex h-11 shrink-0 cursor-pointer items-center gap-1 rounded-[10px] border border-line bg-panel px-2.5 text-xs text-ink hover:border-accent/60 md:h-8 [&_svg]:size-3.5">
             <ImagePlus /> 图片
             <input
               hidden
@@ -91,7 +91,7 @@ export function Pool() {
       </div>
 
       <input
-        className="mt-3 w-full rounded-[10px] border border-line bg-panel2 px-3 py-3 text-[16px] text-ink outline-none focus:border-accent md:py-2.5 md:text-[13.5px]"
+        className="mt-3 min-h-11 w-full rounded-[10px] border border-line bg-panel2 px-3 py-3 text-[16px] text-ink outline-none focus:border-accent md:py-2.5 md:text-[13.5px]"
         placeholder="快速添加：输入名称回车（比如：豆包）"
         onKeyDown={e => {
           if (e.key !== "Enter") return;

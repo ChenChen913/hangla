@@ -124,7 +124,7 @@ export const ItemChip = memo(function ItemChip({
       }
       title={item.desc || item.name}
       className={cn(
-        "group relative inline-flex max-w-full shrink-0 select-none items-center gap-2 rounded-xl border border-chipline bg-chip text-chipink shadow-[0_1px_3px_rgba(16,24,40,.08)] active:opacity-90",
+        "group relative inline-flex min-h-11 max-w-full shrink-0 select-none items-center gap-2 rounded-xl border border-chipline bg-chip text-chipink shadow-[0_1px_3px_rgba(16,24,40,.08)] active:opacity-90",
         // 有图时内边距均匀；右侧留白只在显示名称时需要（给图和文字之间留间距），
         // 否则隐藏名称后图片右侧会多出一条底色边
         item.image && display.showImages

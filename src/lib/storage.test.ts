@@ -364,6 +364,25 @@ describe("存档存储层：失败注入（单 Key 不存在半份数据）", ()
     expect(s.map.has(NAME)).toBe(true);
     expect(await storage.getItem(NAME)).toEqual({ state: { a: 1 }, version: 10 });
   });
+
+  it("切到后台（visibilitychange → hidden）时落盘，手机上杀进程前不丢最后一次修改", async () => {
+    const s = fakeStorage();
+    const docListeners: Record<string, Array<() => void>> = {};
+    vi.stubGlobal("window", { addEventListener: () => undefined });
+    vi.stubGlobal("document", {
+      addEventListener: (type: string, cb: () => void) => (docListeners[type] ??= []).push(cb),
+      visibilityState: "hidden",
+    });
+
+    const storage = createBoardStorage({ delay: 60_000, backend: s.backend });
+    storage.setItem(NAME, { state: { title: "切后台前" }, version: 10 });
+    expect(s.map.has(NAME)).toBe(false);
+
+    docListeners.visibilitychange?.forEach(fn => fn());
+
+    expect(s.map.has(NAME)).toBe(true);
+    expect(await storage.getItem(NAME)).toEqual({ state: { title: "切后台前" }, version: 10 });
+  });
 });
 
 describe("存档存储层：旧版双 Key 兼容", () => {
@@ -427,6 +446,192 @@ describe("存档存储层：旧版双 Key 兼容", () => {
     await tick();
 
     expect(await storage.getItem(NAME)).toEqual(value);
+  });
+});
+
+describe("存档存储层：图片表损坏时的索引稳定性", () => {
+  /** 新格式信封：正文里的 image 值已经是 token */
+  const envelope = (images: unknown, value: unknown) =>
+    JSON.stringify({ __hangla: 2, images, value });
+
+  it("图片数组正常时按原下标还原", async () => {
+    const s = fakeStorage();
+    s.map.set(
+      NAME,
+      envelope(
+        [IMG_A, IMG_B],
+        { state: { a: { image: "\u0000img:0" }, b: { image: "\u0000img:1" } }, version: 10 },
+      ),
+    );
+    const storage = createBoardStorage({ delay: 1, backend: s.backend });
+    const back = (await storage.getItem(NAME)) as {
+      state: { a: { image: string }; b: { image: string } };
+    };
+    expect(back.state.a.image).toBe(IMG_A);
+    expect(back.state.b.image).toBe(IMG_B);
+  });
+
+  it("图片数组含 null：非法项原地降级为空图，后面的合法图片不下标左移", async () => {
+    const s = fakeStorage();
+    s.map.set(
+      NAME,
+      envelope(
+        [IMG_A, null, IMG_B],
+        {
+          state: {
+            a: { image: "\u0000img:0" },
+            broken: { image: "\u0000img:1" },
+            c: { image: "\u0000img:2" },
+          },
+          version: 10,
+        },
+      ),
+    );
+    const storage = createBoardStorage({ delay: 1, backend: s.backend });
+    const back = (await storage.getItem(NAME)) as {
+      state: { a: { image: string }; broken: { image: string }; c: { image: string } };
+    };
+
+    expect(back.state.a.image).toBe(IMG_A);
+    expect(back.state.broken.image).toBe("");
+    // 关键：下标 2 必须仍然是 B，而不是被 filter 压缩后指向的 A / 空
+    expect(back.state.c.image).toBe(IMG_B);
+  });
+
+  it("图片数组含数字 / 对象 / 普通字符串：只保留原位置，不误配给别的卡片", async () => {
+    const s = fakeStorage();
+    s.map.set(
+      NAME,
+      envelope(
+        [42, { bad: true }, "https://evil.example/x.png", IMG_A],
+        {
+          state: {
+            a: { image: "\u0000img:0" },
+            b: { image: "\u0000img:1" },
+            c: { image: "\u0000img:2" },
+            d: { image: "\u0000img:3" },
+          },
+          version: 10,
+        },
+      ),
+    );
+    const storage = createBoardStorage({ delay: 1, backend: s.backend });
+    const back = (await storage.getItem(NAME)) as {
+      state: Record<string, { image: string }>;
+    };
+
+    expect(back.state.a.image).toBe("");
+    expect(back.state.b.image).toBe("");
+    // 外部 URL 不是合法的图片表项，不能当作图片塞回 <img src>
+    expect(back.state.c.image).toBe("");
+    expect(back.state.d.image).toBe(IMG_A);
+  });
+
+  it("token 指向非法位置时退化为空图，不影响同档其他卡片", async () => {
+    const s = fakeStorage();
+    s.map.set(
+      NAME,
+      envelope(
+        [IMG_A, null, IMG_B],
+        {
+          state: {
+            a: { image: "\u0000img:0" },
+            b: { image: "\u0000img:1" },
+            c: { image: "\u0000img:2" },
+          },
+          version: 10,
+        },
+      ),
+    );
+    const storage = createBoardStorage({ delay: 1, backend: s.backend });
+    const back = (await storage.getItem(NAME)) as {
+      state: { a: { image: string }; b: { image: string }; c: { image: string } };
+    };
+    expect(back.state.b.image).toBe("");
+    expect(back.state.a.image).toBe(IMG_A);
+    expect(back.state.c.image).toBe(IMG_B);
+  });
+
+  it("token 超出图片数组范围时退化为空图，正文其他字段照常读出", async () => {
+    const s = fakeStorage();
+    s.map.set(
+      NAME,
+      envelope([IMG_A], { state: { title: "越界的新格式", a: { image: "\u0000img:9" } }, version: 10 }),
+    );
+    const storage = createBoardStorage({ delay: 1, backend: s.backend });
+    const back = (await storage.getItem(NAME)) as { state: { title: string; a: { image: string } } };
+    expect(back.state.title).toBe("越界的新格式");
+    expect(back.state.a.image).toBe("");
+  });
+
+  it("旧版图片库含 null / 非法项时同样保留原始下标", async () => {
+    const s = fakeStorage();
+    s.map.set(
+      NAME,
+      JSON.stringify({
+        state: {
+          a: { image: "\u0000img:0" },
+          broken: { image: "\u0000img:1" },
+          c: { image: "\u0000img:2" },
+        },
+        version: 10,
+      }),
+    );
+    s.map.set(LEGACY_BANK, JSON.stringify([IMG_A, null, IMG_B]));
+
+    const storage = createBoardStorage({ delay: 1, backend: s.backend });
+    const back = (await storage.getItem(NAME)) as {
+      state: { a: { image: string }; broken: { image: string }; c: { image: string } };
+    };
+    expect(back.state.a.image).toBe(IMG_A);
+    expect(back.state.broken.image).toBe("");
+    expect(back.state.c.image).toBe(IMG_B);
+  });
+
+  it("新格式的 images 字段损坏时按空表处理，绝不跌回旧图片库错配图片", async () => {
+    const s = fakeStorage();
+    s.map.set(
+      NAME,
+      envelope("这不是数组", { state: { title: "新正文", a: { image: "\u0000img:0" } }, version: 10 }),
+    );
+    // 磁盘上恰好还留着旧图片库：不能被新正文的 token 借用
+    s.map.set(LEGACY_BANK, JSON.stringify([IMG_B]));
+
+    const storage = createBoardStorage({ delay: 1, backend: s.backend });
+    const back = (await storage.getItem(NAME)) as { state: { title: string; a: { image: string } } };
+    expect(back.state.title).toBe("新正文");
+    expect(back.state.a.image).toBe("");
+  });
+
+  it("图片数组完全损坏（全是非法项）时榜单仍能打开，只是所有图片为空", async () => {
+    const s = fakeStorage();
+    s.map.set(
+      NAME,
+      envelope(
+        [null, 0, {}, []],
+        {
+          state: {
+            title: "图片全坏但正文还在",
+            a: { image: "\u0000img:0" },
+            b: { image: "\u0000img:1" },
+            c: { image: "\u0000img:2" },
+            d: { image: "\u0000img:3" },
+          },
+          version: 10,
+        },
+      ),
+    );
+    const storage = createBoardStorage({ delay: 1, backend: s.backend });
+    const back = (await storage.getItem(NAME)) as {
+      state: { title: string; a: { image: string }; b: { image: string }; c: { image: string }; d: { image: string } };
+    };
+    expect(back.state.title).toBe("图片全坏但正文还在");
+    expect([back.state.a.image, back.state.b.image, back.state.c.image, back.state.d.image]).toEqual([
+      "",
+      "",
+      "",
+      "",
+    ]);
   });
 });
 

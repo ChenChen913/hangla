@@ -170,7 +170,7 @@ export function ItemDialog() {
             <button
               type="button"
               onClick={() => setImage(undefined)}
-              className="min-h-10 cursor-pointer px-1 text-xs text-muted hover:text-danger"
+              className="min-h-11 cursor-pointer px-1 text-xs text-muted hover:text-danger"
             >
               移除图片
             </button>
@@ -233,7 +233,7 @@ export function ItemDialog() {
                 <button
                   type="button"
                   onClick={() => setTilt(0)}
-                  className="min-h-10 shrink-0 cursor-pointer px-1 text-[11px] text-muted hover:text-ink"
+                  className="min-h-11 shrink-0 cursor-pointer px-1 text-[11px] text-muted hover:text-ink"
                 >
                   归零
                 </button>

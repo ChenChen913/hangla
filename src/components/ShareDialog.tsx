@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Check, Download, Link2 } from "lucide-react";
 import type { Board } from "../types";
 import { useBoard } from "../store/board";
@@ -8,7 +8,7 @@ import { exportPalette } from "../lib/themes";
 import { copyText, timestamp } from "../lib/utils";
 import { planShare, shareLengthInfo, shareLinkNotice, type SharePlan } from "../lib/share";
 import { exportBoardRef } from "../lib/exportNode";
-import { currentSaveChannel, downloadBlob, exportFileName, exportPixelRatio, shareBlob, withTimeout } from "../lib/saveImage";
+import { currentSavePlan, downloadBlob, exportFileName, exportSizeProblem, planExportSize, shareBlob, withTimeout } from "../lib/saveImage";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./ui/dialog";
 
@@ -28,10 +28,11 @@ export function ShareDialog() {
   const display = useBoard(s => s.display);
   /** 分享卡片：Blob + object URL（用对象地址而不是几 MB 的 data URL，手机内存友好） */
   const [card, setCard] = useState<{ url: string; blob: Blob } | null>(null);
+  const [cardError, setCardError] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const [share, setShare] = useState<ShareState>({ kind: "idle" });
   // iOS / 微信里下载不可靠：弹窗里直接提示长按保存，别让用户以为文件已经存好了
-  const [saveChannel] = useState(currentSaveChannel);
+  const savePlan = useMemo(() => currentSavePlan(), [open]);
   const notice = shareLinkNotice();
 
   // 先量长度、再决定要不要编码；大榜单分片异步编码，不卡主线程。
@@ -80,27 +81,36 @@ export function ShareDialog() {
   useEffect(() => {
     if (!open) {
       setCard(null);
+      setCardError(false);
       return;
     }
     const node = exportBoardRef.current;
     if (!node) return;
     let alive = true;
     let objectUrl: string | null = null;
+    setCardError(false);
     // 与「导出 PNG」共用按需加载的 html-to-image，首屏不背这个包；
     // 分包装载卡住时要有明确失败，不能让预览永远停在"正在生成分享卡片…"
     withTimeout(import("html-to-image"), 15_000, "分享卡片组件加载超时")
-      .then(({ toBlob }) =>
-        withTimeout(
+      .then(({ toBlob }) => {
+        // 与「导出 PNG」同一套尺寸规则：极端长图直接拒绝，不生成超限 / 空白画布
+        const sizePlan = planExportSize(node.clientWidth || 1200, node.clientHeight);
+        if (!sizePlan.ok) {
+          setCard(null);
+          setCardError(true);
+          toast(exportSizeProblem(sizePlan), 5600);
+          return null;
+        }
+        return withTimeout(
           toBlob(node, {
-            // 与「导出 PNG」同一套尺寸规则：长榜单降到设备能画出来的像素比
-            pixelRatio: exportPixelRatio(node.clientWidth || 1200, node.clientHeight || 1),
+            pixelRatio: sizePlan.ratio,
             backgroundColor: exportPalette(style, mode).pageBg,
             skipFonts: display.labelFont !== "artistic",
           }),
           30_000,
           "生成分享卡片超时",
-        ),
-      )
+        );
+      })
       .then(blob => {
         if (!alive || !blob) return;
         objectUrl = URL.createObjectURL(blob);
@@ -109,6 +119,7 @@ export function ShareDialog() {
       .catch(() => {
         if (!alive) return;
         setCard(null);
+        setCardError(true);
         toast("分享卡片生成失败，可以直接用顶栏的「导出 PNG」", 4000);
       });
     return () => {
@@ -137,18 +148,27 @@ export function ShareDialog() {
   async function downloadPng() {
     if (!card) return;
     const filename = exportFileName(title, timestamp());
-    if (saveChannel === "download") {
-      downloadBlob(card.blob, filename);
-      toast("已下载 PNG，去下载目录看看");
+    if (savePlan.primary === "download") {
+      try {
+        downloadBlob(card.blob, filename);
+        toast("已开始下载，请在下载目录查看");
+      } catch {
+        toast("下载没有启动，请长按上面的图片保存", 4800);
+      }
+      return;
+    }
+    if (!savePlan.showShare) {
+      toast("当前浏览器不支持可靠下载，长按上面的图片保存即可", 4800);
       return;
     }
     const result = await shareBlob(card.blob, filename, "排行榜图片");
-    if (result === "shared") toast("已打开系统分享，选「存储图像」即可进相册");
+    if (result === "shared") toast("已交给系统，选「存储图像」即可进相册");
     else if (result === "cancelled") toast("已取消");
     else toast("长按上面的图片，选「存储图像 / 保存图片」即可", 5000);
   }
 
-  const saveLabel = saveChannel === "download" ? "下载 PNG" : "保存 PNG";
+  const saveLabel = savePlan.primary === "download" ? "下载 PNG" : "保存 PNG";
+  const canSavePng = savePlan.primary !== "longpress";
 
   return (
     <Dialog open={open} onOpenChange={setShareOpen}>
@@ -162,11 +182,13 @@ export function ShareDialog() {
           {card ? (
             <img src={card.url} alt="分享卡片预览" className="w-full" />
           ) : (
-            <div className="grid h-40 place-items-center text-sm text-muted">正在生成分享卡片…</div>
+            <div className="grid h-40 place-items-center text-sm text-muted">
+              {cardError ? "分享卡片生成失败，请用「导出 PNG」重试" : "正在生成分享卡片…"}
+            </div>
           )}
         </div>
 
-        {saveChannel !== "download" && card && (
+        {savePlan.showLongPressHint && card && (
           <p className="mt-2 text-[12px] leading-relaxed text-muted">
             长按上面的图片也能直接存进相册（iOS / 微信里最稳的一条路）。
           </p>
@@ -176,7 +198,7 @@ export function ShareDialog() {
 
         <div className="mt-4 flex flex-wrap justify-end gap-2">
           {/* 长链接时把「下载 PNG」放到前面：默认焦点落在真能发出去的那个按钮上 */}
-          {preferPng && (
+          {preferPng && canSavePng && (
             <Button variant="primary" disabled={!card} onClick={() => void downloadPng()}>
               <Download /> {saveLabel}（推荐）
             </Button>
@@ -189,7 +211,7 @@ export function ShareDialog() {
           >
             {linkCopied ? <Check /> : <Link2 />} {linkCopied ? "链接已复制" : "复制链接"}
           </Button>
-          {!preferPng && (
+          {!preferPng && canSavePng && (
             <Button variant="primary" disabled={!card} onClick={() => void downloadPng()}>
               <Download /> {saveLabel}
             </Button>

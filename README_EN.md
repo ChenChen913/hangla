@@ -29,7 +29,7 @@ git clone https://github.com/ChenChen913/hangla.git && cd hangla && npm install 
 - **4 visual styles × day/night palettes** (8 themes): 现代 (modern) / 经典梗图 (classic meme) / 抽象梗风 (abstract meme) / 赛博霓虹 (cyber neon)
 - **High-resolution PNG export**: rendered at up to 2× pixel ratio (tall boards automatically drop to a size the device can rasterize, instead of producing a blank image on phones), file name follows `<timestamp>-<board name>-排行榜.png`, timestamped to the second; on iPhone and inside WeChat a save sheet opens first, so you can use the system share sheet or long-press to save to Photos
 - **Share links**: the whole board (images included) is encoded into the URL, so the recipient sees the same board and can copy it into their own editor in one click. Images are inlined, though — **one re-encoded photo adds roughly 140k characters to the link**, far beyond what WeChat / QQ will carry, so the dialog reports the actual length and promotes the PNG download when the link is long
-- **Mobile**: bottom action bar with 44px touch targets; long-press for 0.2s to drag, tap a card to open the edit sheet; moving items between tiers, reordering tiers and deleting never depend on dragging; dialogs become bottom sheets with safe-area, dynamic-viewport and soft-keyboard handling
+- **Mobile**: bottom action bar with 44px primary touch targets (secondary controls are at least 40px and marked in code); long-press for 0.2s to drag, tap a card to open the edit sheet; moving items between tiers, reordering tiers and deleting never depend on dragging; dialogs become bottom sheets with safe-area, dynamic-viewport and soft-keyboard handling
 - **Item pool**: a staging area for unranked items — upload a logo, add a one-line description, paste or drop images; images are re-encoded by content (photos become JPEG, illustrations with transparency stay PNG) with the longest side capped at 640px
 - **My boards**: save board snapshots in this browser, up to 30 of them; JSON export / import is available for backup
 - **Fullscreen layout**: hide the navigation bar and show nothing but the board — handy for streaming or screen recording
@@ -213,7 +213,7 @@ There are three optional browser check scripts (the first two need Chrome instal
 
 ```sh
 npm run browser:check   # real Chrome: upload / drag / share round-trip / snapshot restore / PNG export / mobile / storage fallback
-npm run mobile:check    # nine viewports: overflow, touch targets, bottom sheets, long-press drag, long text, export/import
+npm run mobile:check    # CI gate: nine viewports for overflow / touch targets plus touch interactions; exits 1 on failure
 npm run live:check      # production smoke test: deployed assets, cache headers, deep links, storage fallback
 ```
 
@@ -227,7 +227,7 @@ Commit conventions live in [CONTRIBUTING.md](CONTRIBUTING.md); project rules for
 It should — the export canvas and the editor share the same rendering parameters (palette, shadow, spacing, font, tilt angles are all in sync). If you do see a difference, refresh the page and try again.
 
 **Nothing happens when I tap "导出 PNG" on my phone, and there's no image in Photos?**
-iOS and the in-app browsers of WeChat / QQ block page-triggered downloads (`a[download]` is ignored there), so those environments now open a save sheet first: tap "保存 / 分享" to use the system share sheet (choose "Save Image"), or simply long-press the preview. Android and desktop browsers still download with a single click. Very tall boards also used to exceed the iOS canvas limit and come out blank — the export now lowers the pixel ratio to fit the device, capping the longest side at 4096px.
+iOS and the in-app browsers of WeChat / QQ block page-triggered downloads (`a[download]` is ignored there), so those environments now open a save sheet first: on iOS tap "保存 / 分享" to use the system share sheet (choose "Save Image"), or simply long-press the preview; in WeChat and similar in-app browsers only the long-press hint is shown, never a download button. Android and desktop browsers still download with a single click. Very tall boards also used to exceed the iOS canvas limit and come out blank — the export now lowers the pixel ratio to fit the device, capping the longest side at 4096px; if even 0.1× cannot fit, it tells you to remove some entries instead of producing a blank image.
 
 **A share link won't open, or reports corrupted data?**
 The link encodes the entire board including images, so a long one can be truncated by some chat apps. Do the maths: a 640px photo is about 80KB after re-encoding, which becomes a data URL and then an encoded payload — **roughly 140k characters per image**, while chat apps reliably carry a few thousand. So **if the board has any images, use the PNG download**; links are for text-only boards. The dialog shows the exact character count and switches "下载 PNG" to the primary button past 8,000 characters.

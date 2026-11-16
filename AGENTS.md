@@ -55,13 +55,17 @@
   `scripts/project-facts.json` 为唯一来源；改代码常量后同步改它，两份 README 一起改，
   `npm run docs:check` 会校验。
 - **触屏交互的硬约定**：
-  - 移动端可点区域不小于 44px（`Button` 默认 `h-11 md:h-9`）；不允许把关键操作藏在 `hover` 里。
+  - 移动端可点区域：主要操作 ≥44px（`Button` 默认 `h-11 md:h-9`）；次要操作若确实达不到，
+    必须加 `data-touch-compact` 注明理由，最低 40px；<40px 由 `mobile:check` 直接判失败。
+    横屏 / 平板 ≥768px 沿用桌面密度（最低 32px），报告中单列为已知限制。
+  - 不允许把关键操作藏在 `hover` 里。
   - 拖拽用 `MouseSensor(distance:6) + TouchSensor(delay:220, tolerance:8)`；禁止给可拖拽元素加
     `touch-action: none`（会把整页滚动锁死）。长按才算拖拽，普通滑动必须能滚页面。
   - 每个条目 / 档位都要有不依赖拖拽的备用操作（上移、下移、换档、删除）。
   - 手机上的弹窗统一走 `.dlg-content` 的底部抽屉（`index.css`），不要在组件里写死高度或宽度。
   - 触屏设备的输入框字号必须 ≥16px（iOS 会自动放大页面）；`.title-input` 是唯一例外。
   - 新增布局优先用 `<768` / `md:` / `lg:`，不要用 `sm:` 切换触控密度（640px 横屏仍是手机）。
-- 移动端回归：`npm run mobile:check`（9 视口 + 触屏交互），桌面回归：`npm run browser:check`。
-  两者都需要本机 Chrome，先 `npm run build:web`。
+- 移动端回归：`npm run mobile:check`（9 视口布局 + 触屏交互，**默认失败门禁**，
+  关键项不通过退出码非 0；`--report-only` 才只报告）；桌面回归：`npm run browser:check`。
+  两者都需要本机 Chrome，先 `npm run build:web`；CI 的 `browser` Job 会同时跑这两项。
 - `dist/` 是构建产物不入库；演示单文件由 `npm run build` 生成。

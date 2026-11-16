@@ -95,6 +95,15 @@ describe("批量图片处理", () => {
     expect(useUi.getState().imageProgress).toBeNull();
   });
 
+  it("解码失败（坏图）时跳过该图，不会把坏 data URL 原样写进项目库", async () => {
+    mockEncode.mockRejectedValue(new Error("图片解码失败"));
+
+    await addImageFilesToPool([file("broken.bmp")]);
+
+    expect(useBoard.getState().pool).toHaveLength(0);
+    expect(useUi.getState().imageProgress).toBeNull();
+  });
+
   it("整批只写一次 store（避免 20 张图触发 20 次整份序列化写盘）", async () => {
     let poolChanges = 0;
     const unsub = useBoard.subscribe((s, prev) => {

@@ -16,7 +16,7 @@ const buttonVariants = cva(
       size: {
         // 手机 44px、桌面 36px：触屏够得着，桌面不变胖
         default: "h-11 px-3.5 md:h-9",
-        sm: "h-10 px-2.5 text-xs md:h-7",
+        sm: "h-11 px-2.5 text-xs md:h-7",
         icon: "h-11 w-11 md:h-9 md:w-9",
       },
     },

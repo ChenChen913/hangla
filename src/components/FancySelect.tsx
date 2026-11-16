@@ -148,7 +148,7 @@ export function FancySelect({
           }
         }}
         className={cn(
-          "inline-flex h-10 cursor-pointer select-none items-center gap-2 rounded-[10px] border border-line bg-panel px-3 text-[13.5px] text-ink transition-colors hover:border-accent/60 md:h-9",
+          "inline-flex h-11 cursor-pointer select-none items-center gap-2 rounded-[10px] border border-line bg-panel px-3 text-[13.5px] text-ink transition-colors hover:border-accent/60 md:h-9",
           open && "border-accent/60",
           className,
         )}

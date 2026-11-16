@@ -160,6 +160,20 @@ function resolveTokens(node: unknown, images: string[]): unknown {
   });
 }
 
+/**
+ * 清洗图片表，**保留原始下标**。
+ *
+ * 图片引用是 `\u0000img:N` 的数组下标，一旦用 filter 把非法项删掉，
+ * 后面的合法图片会整体左移：原始 `[A, null, B]` 变成 `[A, B]`，
+ * token 2 原本指向 B，清洗后指向不存在的下标 → B 丢失；
+ * 更糟的是 token 1 原本是坏图，清洗后会指向 B，把 B 错配给别的位置。
+ *
+ * 所以非法项只降级成空串，位置必须原地保留。
+ */
+function sanitizeImages(list: unknown[]): string[] {
+  return list.map(x => (typeof x === "string" && x.startsWith("data:") ? x : ""));
+}
+
 export type BoardStorageOptions = {
   /** 合并写入的等待时间（毫秒） */
   delay?: number;
@@ -197,7 +211,8 @@ export function createBoardStorage<S = unknown>(options: BoardStorageOptions = {
     if (!raw) return [];
     try {
       const arr = JSON.parse(raw);
-      return Array.isArray(arr) ? arr.filter((x): x is string => typeof x === "string" && x.startsWith("data:")) : [];
+      // 同样不能用 filter 压缩下标：旧正文里的 token 是按原始位置写的
+      return Array.isArray(arr) ? sanitizeImages(arr) : [];
     } catch {
       return [];
     }
@@ -271,10 +286,12 @@ export function createBoardStorage<S = unknown>(options: BoardStorageOptions = {
       if (!raw) return null;
       try {
         const parsed = JSON.parse(raw) as Record<string, unknown>;
-        if (parsed && parsed[ENVELOPE] === FORMAT && Array.isArray(parsed.images)) {
-          // 信封结构对、但 value 不是对象：当作损坏，别把 undefined 交给 persist
+        if (parsed && parsed[ENVELOPE] === FORMAT) {
+          // 新格式：信封结构对、但 value 不是对象：当作损坏，别把 undefined 交给 persist
           if (!parsed.value || typeof parsed.value !== "object") return null;
-          const images = parsed.images.filter((x): x is string => typeof x === "string");
+          // images 字段损坏时按空表处理；token 全部退化为空图，正文照常打开。
+          // 不能因为 images 不是数组就跌回旧格式分支——那会把旧图片库的图错配到新正文上。
+          const images = Array.isArray(parsed.images) ? sanitizeImages(parsed.images) : [];
           return resolveTokens(parsed.value, images) as StorageValue<S>;
         }
         // 旧格式：正文 + 独立的 hangla.v3::images
