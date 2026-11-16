@@ -8,7 +8,7 @@ import { exportPalette } from "../lib/themes";
 import { copyText, timestamp } from "../lib/utils";
 import { planShare, shareLengthInfo, shareLinkNotice, type SharePlan } from "../lib/share";
 import { exportBoardRef } from "../lib/exportNode";
-import { currentSavePlan, downloadBlob, exportFileName, exportSizeProblem, planExportSize, shareBlob, withTimeout } from "../lib/saveImage";
+import { assertExportBlob, currentSavePlan, downloadBlob, exportFailureMessage, exportFileName, exportSizeProblem, planExportSize, shareBlob, withTimeout } from "../lib/saveImage";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./ui/dialog";
 
@@ -112,15 +112,26 @@ export function ShareDialog() {
         );
       })
       .then(blob => {
-        if (!alive || !blob) return;
-        objectUrl = URL.createObjectURL(blob);
-        setCard({ url: objectUrl, blob });
+        if (!alive || !blob) {
+          if (alive) setCardError(true);
+          return;
+        }
+        let safeBlob: Blob;
+        try {
+          safeBlob = assertExportBlob(blob);
+        } catch (error) {
+          setCardError(true);
+          toast(exportFailureMessage(error), 5200);
+          return;
+        }
+        objectUrl = URL.createObjectURL(safeBlob);
+        setCard({ url: objectUrl, blob: safeBlob });
       })
-      .catch(() => {
+      .catch(error => {
         if (!alive) return;
         setCard(null);
         setCardError(true);
-        toast("分享卡片生成失败，可以直接用顶栏的「导出 PNG」", 4000);
+        toast(exportFailureMessage(error), 5200);
       });
     return () => {
       alive = false;

@@ -41,8 +41,13 @@ export function SaveImageDialog() {
   async function share() {
     if (!pending || busy || !plan.showShare) return;
     setBusy(true);
-    const result = await shareBlob(pending.blob, pending.filename, "排行榜图片");
-    setBusy(false);
+    let result: Awaited<ReturnType<typeof shareBlob>>;
+    try {
+      result = await shareBlob(pending.blob, pending.filename, "排行榜图片");
+    } finally {
+      // 无论分享 API 抛什么，都不能把按钮永远留在"正在打开…"
+      setBusy(false);
+    }
     if (result === "shared") {
       toast("已交给系统，选「存储图像」即可存进相册");
       close();

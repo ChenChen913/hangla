@@ -207,6 +207,7 @@ npm run build      # type-check + single-file build
 npm run build:web  # type-check + web build (external fonts, for deployment)
 npm run preview    # preview the build output
 npm run docs:check # README anchors + bilingual consistency + fact-number checks
+npm run release:info # unified version / commit / live asset / CI status (--check verifies consistency)
 ```
 
 There are three optional browser check scripts (the first two need Chrome installed and a prior `npm run build:web`; `live:check` hits the live URL directly):

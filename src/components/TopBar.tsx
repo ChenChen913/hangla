@@ -15,8 +15,10 @@ import { FancySelect, type FancyOption } from "./FancySelect";
 import { DisplaySettings } from "./DisplaySettings";
 import { exportBoardRef } from "../lib/exportNode";
 import {
+  assertExportBlob,
   currentSaveEnvironment,
   downloadBlob,
+  exportFailureMessage,
   exportFileName,
   exportSizeProblem,
   planExportSize,
@@ -160,25 +162,22 @@ export async function exportBoardPng() {
       30_000,
       "生成图片超时，图太多太大时先删掉几张再试",
     );
-    if (!blob || blob.size === 0) throw new Error("画布生成失败，可能是图片过大");
+    if (!blob) throw new Error("画布生成失败，可能是图片过大");
+    const safeBlob = assertExportBlob(blob);
     const filename = exportFileName(s.title, timestamp());
 
     // 桌面 / Android 浏览器直接下载；iOS 与微信等内置浏览器改成先出预览面板。
     // （原因见 lib/saveImage.ts 顶部注释：await 之后 a.click() 在 iOS 会被静默拦截）
     const savePlan = planSaveUi(currentSaveEnvironment());
     if (savePlan.channel === "download") {
-      downloadBlob(blob, filename);
+      downloadBlob(safeBlob, filename);
       toast("已开始下载，请在下载目录查看");
       return;
     }
-    useUi.getState().setPendingImage({ url: URL.createObjectURL(blob), blob, filename });
+    useUi.getState().setPendingImage({ url: URL.createObjectURL(safeBlob), blob: safeBlob, filename });
   } catch (err) {
-    const raw = (err as Error)?.message || "未知原因";
-    // 两类失败给两种指引：分包装载失败是网络问题，其余多半是位图太大
-    const hint = /dynamically imported module|module script|chunk|超时/i.test(raw)
-      ? "请检查网络后重试"
-      : "图太多太大时，先删掉几张图片再试";
-    toast(`导出失败：${raw.slice(0, 60)}。${hint}`, 5200);
+    // 组件加载失败 / Canvas 创建失败 / 内存不足 / 空 Blob 都收敛成可执行的提示
+    toast(exportFailureMessage(err), 6000);
   }
 }
 

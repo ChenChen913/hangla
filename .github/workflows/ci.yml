@@ -33,6 +33,15 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm run build:web
+      - name: 写入构建元信息
+        run: |
+          ASSET=$(grep -o 'assets/index-[A-Za-z0-9_-]*\.js' dist-web/index.html | head -1 | sed 's#assets/##')
+          if [ -z "$ASSET" ]; then
+            echo "::error::无法从 dist-web/index.html 解析主 JS"
+            exit 1
+          fi
+          printf '{"sha":"%s","asset":"%s"}\n' "$GITHUB_SHA" "$ASSET" > dist-web/deploy-meta.json
+          cat dist-web/deploy-meta.json
       - uses: actions/upload-artifact@v4
         with:
           name: dist-web
@@ -71,3 +80,97 @@ jobs:
       # mobile:check 默认就是失败门禁：布局、触控尺寸、触屏交互任一关键项失败即退出 1
       - name: 移动端布局与触屏交互门禁
         run: npm run mobile:check
+
+  # Cloudflare 自动部署：只在 main push、且质量检查与浏览器回归都通过后运行。
+  # 默认关闭，需要仓库变量 CF_DEPLOY_ENABLED=true 与两个 Secrets 才启用。
+  deploy-cloudflare:
+    needs: [build, browser]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.CF_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    concurrency:
+      group: cloudflare-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist-web
+          path: dist-web
+      - name: 校验构建产物来自当前提交
+        run: |
+          test -f dist-web/deploy-meta.json
+          node -e '
+            const fs = require("fs");
+            const meta = JSON.parse(fs.readFileSync("dist-web/deploy-meta.json", "utf8"));
+            if (meta.sha !== process.env.GITHUB_SHA) {
+              console.error(`::error::构建产物来自 ${meta.sha}，当前提交是 ${process.env.GITHUB_SHA}`);
+              process.exit(1);
+            }
+            console.log(`构建产物：${meta.asset} @ ${meta.sha}`);
+          '
+      - name: 检查 Cloudflare 凭据
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CF_TOKEN" ] || [ -z "$CF_ACCOUNT" ]; then
+            echo "::error::缺少 CLOUDFLARE_API_TOKEN 或 CLOUDFLARE_ACCOUNT_ID。请先在仓库 Secrets 中配置，再启用 CF_DEPLOY_ENABLED。"
+            exit 1
+          fi
+      - name: 部署到 Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npx --yes wrangler@4 pages deploy dist-web \
+            --project-name hangla \
+            --branch main \
+            --commit-hash "$GITHUB_SHA" \
+            --commit-message "$GITHUB_SHA $(git log -1 --format=%s)"
+
+  # 变量未启用时的显式提示：不假装部署成功，也不让 main 长期红灯
+  cloudflare-disabled:
+    needs: [build, browser]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.CF_DEPLOY_ENABLED != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: 说明自动部署未启用
+        run: |
+          echo "::warning::Cloudflare 自动部署未启用。配置 CLOUDFLARE_API_TOKEN、CLOUDFLARE_ACCOUNT_ID 后，设置仓库变量 CF_DEPLOY_ENABLED=true。"
+          echo "### Cloudflare 自动部署未启用" >> "$GITHUB_STEP_SUMMARY"
+          echo "质量检查已通过，但生产部署未执行。配置两个 Secrets 与仓库变量后重新运行。" >> "$GITHUB_STEP_SUMMARY"
+
+  # 部署后的线上冒烟：校验生产主 JS 与本次构建一致，避免"部署成功但线上还是旧文件"
+  smoke:
+    needs: deploy-cloudflare
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.CF_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist-web
+          path: dist-web
+      - name: 确认 Chrome 可用
+        run: |
+          CHROME_BIN="$(command -v google-chrome || command -v google-chrome-stable || true)"
+          if [ -z "$CHROME_BIN" ]; then
+            echo "::error::线上冒烟需要 Chrome，当前 Runner 找不到。"
+            exit 1
+          fi
+          echo "CHROME_PATH=$CHROME_BIN" >> "$GITHUB_ENV"
+          "$CHROME_BIN" --version
+      - name: 线上冒烟并校验主 JS
+        run: |
+          ASSET=$(node -p "require('./dist-web/deploy-meta.json').asset")
+          echo "校验线上主 JS：$ASSET"
+          EXPECT_ASSET="$ASSET" node scripts/live-check.mjs

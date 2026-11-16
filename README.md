@@ -205,6 +205,7 @@ npm run build      # 类型检查 + 打包单文件版
 npm run build:web  # 类型检查 + 网页版构建（字体独立，部署用）
 npm run preview    # 预览构建产物
 npm run docs:check # README 锚点 + 双语一致性 + 事实数字校验
+npm run release:info # 统一读取版本 / 提交 / 两站线上主 JS / CI 状态（--check 校验一致性）
 ```
 
 另有三份可选的浏览器检查脚本（前两个需要本机装 Chrome 并先 `npm run build:web`；`live:check` 直接访问线上地址）：

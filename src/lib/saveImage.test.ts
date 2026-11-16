@@ -3,8 +3,11 @@ import {
   MAX_EXPORT_AREA,
   MAX_EXPORT_SIDE,
   MIN_EXPORT_PIXEL_RATIO,
+  assertExportBlob,
+  exportFailureMessage,
   exportFileName,
   exportSizeProblem,
+  isGenericWebView,
   isInAppBrowser,
   isIosLike,
   pickSaveChannel,
@@ -29,6 +32,15 @@ const ANDROID =
   "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36";
 const WECHAT_IOS = IPHONE + " MicroMessenger/8.0.49";
 const WECHAT_ANDROID = ANDROID + " MicroMessenger/8.0.49";
+const ALIPAY_IOS = IPHONE + " AlipayClient/10.5.70";
+const FEISHU_ANDROID = ANDROID + " Lark/7.20.0";
+const DINGTALK_ANDROID = ANDROID + " DingTalk/7.6.0";
+const QQ_IOS = IPHONE + " QQ/8.9.68";
+const QQBROWSER_ANDROID = ANDROID + " MQQBrowser/14.9 QQBrowser/14.9";
+const ANDROID_WEBVIEW =
+  "Mozilla/5.0 (Linux; Android 13; Pixel 7; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/124.0.0.0 Mobile Safari/537.36";
+const UNKNOWN_ANDROID =
+  "Mozilla/5.0 (Linux; Android 13; SM-S911B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36";
 const WINDOWS =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 const MAC = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
@@ -66,6 +78,20 @@ describe("设备判定", () => {
     expect(isInAppBrowser(WECHAT_ANDROID)).toBe(true);
     expect(isInAppBrowser(ANDROID)).toBe(false);
     expect(isInAppBrowser(WINDOWS)).toBe(false);
+  });
+
+  it("认得支付宝 / 飞书 / 钉钉 / QQ 内置浏览器，QQBrowser 仍是完整浏览器", () => {
+    expect(isInAppBrowser(ALIPAY_IOS)).toBe(true);
+    expect(isInAppBrowser(FEISHU_ANDROID)).toBe(true);
+    expect(isInAppBrowser(DINGTALK_ANDROID)).toBe(true);
+    expect(isInAppBrowser(QQ_IOS)).toBe(true);
+    expect(isInAppBrowser(QQBROWSER_ANDROID)).toBe(false);
+  });
+
+  it("通用 Android WebView（; wv）单独识别，不和完整 Chrome 混为一谈", () => {
+    expect(isGenericWebView(ANDROID_WEBVIEW)).toBe(true);
+    expect(isGenericWebView(UNKNOWN_ANDROID)).toBe(false);
+    expect(isGenericWebView(ANDROID)).toBe(false);
   });
 });
 
@@ -170,6 +196,56 @@ describe("保存面板入口规划", () => {
       expect(plan.showShare).toBe(false);
       expect(plan.showLongPressHint).toBe(true);
     }
+  });
+
+  it("支付宝 / 飞书 / 钉钉 / QQ 内置浏览器：不把直接下载当主入口", () => {
+    for (const ua of [ALIPAY_IOS, FEISHU_ANDROID, DINGTALK_ANDROID, QQ_IOS]) {
+      const plan = planSaveUi({
+        userAgent: ua,
+        maxTouchPoints: 5,
+        supportsDownload: true,
+        supportsShareFiles: true,
+      });
+      expect(plan.channel).toBe("sheet");
+      expect(plan.primary).toBe("longpress");
+      expect(plan.showDownload).toBe(false);
+      expect(plan.showShare).toBe(false);
+    }
+  });
+
+  it("通用 Android WebView：download 属性存在也不直接下载", () => {
+    const withShare = planSaveUi({
+      userAgent: ANDROID_WEBVIEW,
+      maxTouchPoints: 5,
+      supportsDownload: true,
+      supportsShareFiles: true,
+    });
+    expect(withShare.channel).toBe("sheet");
+    expect(withShare.primary).toBe("share");
+    expect(withShare.showDownload).toBe(false);
+
+    const noShare = planSaveUi({
+      userAgent: ANDROID_WEBVIEW,
+      maxTouchPoints: 5,
+      supportsDownload: true,
+      supportsShareFiles: false,
+    });
+    expect(noShare.channel).toBe("sheet");
+    expect(noShare.primary).toBe("longpress");
+    expect(noShare.showDownload).toBe(false);
+  });
+
+  it("未识别的完整 Android 浏览器：仍按 download 能力走直接下载", () => {
+    const plan = planSaveUi({ userAgent: UNKNOWN_ANDROID, maxTouchPoints: 5, supportsDownload: true });
+    expect(plan.channel).toBe("download");
+    expect(plan.primary).toBe("download");
+    expect(plan.showDownload).toBe(true);
+  });
+
+  it("QQBrowser 自带下载器，不因为 UA 带 QQ 就被误判为内置 WebView", () => {
+    const plan = planSaveUi({ userAgent: QQBROWSER_ANDROID, maxTouchPoints: 5, supportsDownload: true });
+    expect(plan.channel).toBe("download");
+    expect(plan.primary).toBe("download");
   });
 
   it("浏览器没有 download 能力时：有分享用分享，没有分享只能长按", () => {
@@ -303,6 +379,67 @@ describe("导出画布尺寸", () => {
       expect(invalid.reason).toBe("invalid-size");
       expect(exportSizeProblem(invalid)).toContain("刷新页面");
     }
+  });
+
+  it("硬上限常量与文档一致", () => {
+    expect(MAX_EXPORT_SIDE).toBe(4096);
+    expect(MAX_EXPORT_AREA).toBe(16_000_000);
+    expect(MIN_EXPORT_PIXEL_RATIO).toBe(0.1);
+  });
+
+  it("单边边界：1200×40960 刚好可导出，1200×41000 拒绝", () => {
+    const edge = planExportSize(1200, 40960);
+    expect(edge.ok).toBe(true);
+    if (edge.ok) {
+      expect(edge.ratio).toBe(0.1);
+      expect(edge.width).toBe(120);
+      expect(edge.height).toBe(4096);
+    }
+    expect(planExportSize(1200, 41000).ok).toBe(false);
+  });
+});
+
+describe("导出失败兜底", () => {
+  it("toBlob 返回 null 或空 Blob 时按失败处理，不下载 / 分享空图", () => {
+    expect(() => assertExportBlob(null)).toThrow("空图片");
+    expect(() => assertExportBlob(undefined)).toThrow("空图片");
+    expect(() => assertExportBlob(new Blob([]))).toThrow("空图片");
+  });
+
+  it("正常 Blob 原样返回", () => {
+    const blob = new Blob(["png"], { type: "image/png" });
+    expect(assertExportBlob(blob)).toBe(blob);
+  });
+
+  it("Canvas 创建失败 / toBlob 异常 / 内存不足翻译成设备能力提示", () => {
+    for (const message of [
+      "Failed to execute 'toBlob' on 'HTMLCanvasElement'",
+      "Canvas is too large",
+      "out of memory",
+      "设备内存不足",
+    ]) {
+      const hint = exportFailureMessage(new Error(message));
+      expect(hint).toContain("设备无法生成");
+      expect(hint).toContain("删掉");
+    }
+  });
+
+  it("分包装载失败翻译成网络提示", () => {
+    expect(exportFailureMessage(new Error("Failed to fetch dynamically imported module"))).toContain("网络");
+    expect(exportFailureMessage(new Error("导出组件加载超时"))).toContain("网络");
+  });
+
+  it("未知异常保留原始信息并截断，不吞掉原因", () => {
+    const hint = exportFailureMessage(new Error("some unexpected renderer failure"));
+    expect(hint).toContain("导出失败");
+    expect(hint).toContain("unexpected renderer");
+  });
+
+  it("withTimeout 透传 Canvas / OOM 错误，不把失败伪装成超时", async () => {
+    await expect(withTimeout(Promise.reject(new Error("Canvas is too large")), 50, "超时")).rejects.toThrow(
+      "Canvas is too large",
+    );
+    await expect(withTimeout(Promise.reject(new Error("out of memory")), 50, "超时")).rejects.toThrow("out of memory");
   });
 });
 
