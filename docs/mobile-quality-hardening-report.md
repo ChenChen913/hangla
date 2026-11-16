@@ -3,7 +3,7 @@
 > 执行日期：2026-11-16
 > 基线：`origin/main` 提交 `1fb5dbb`（本地 HEAD 与远端一致）
 > 环境：Windows 11、Node `24.18.1`、npm `11.12.1`、Google Chrome `157.0.8103.52`（headless）
-> 交付状态：已提交并推送到 GitHub `ff15f09`；GitHub Actions CI 通过，GitHub Pages 已自动部署；Cloudflare 仍是旧版本（见 §11）。
+> 交付状态：已提交并推送到 GitHub main；GitHub Actions CI 通过，GitHub Pages 与 Cloudflare 均已更新到本轮版本（部署源 `e4e33cb`）。
 > 原则：本报告只写实际执行过、实际量测过的内容；没有真机验证的部分在 §10 明确列出，不声称通过。
 
 ---
@@ -19,8 +19,9 @@
 | `npm run build:web` | 通过，主 JS `index-CtwJsM2z.js` 632.94 kB（gzip 205.23 kB）、CSS 47.87 kB |
 | `npm run browser:check` | **34/34 通过**，17.9s |
 | `npm run mobile:check` | **270/270 项通过，0 个阻断问题，4 条非阻断提示**；退出码 0 |
-| `npm run live:check` | **12/12 通过**，但目标是 Cloudflare，线上仍是旧版本（GitHub Pages 已更新，见 §11） |
-| GitHub Actions CI | run `43863488562` 通过：`check` 14s、`build` 34s、`browser` 2m17s |
+| `npm run live:check` | **12/12 通过**，Cloudflare 已更新到本轮版本（见 §11） |
+| GitHub Actions CI | run `43864182365` 通过：`check` 13s、`build` 32s、`browser` 1m44s |
+| Cloudflare Pages | 部署 `3b3c09c7` 成功，线上主 JS `index-CtwJsM2z.js` |
 
 移动端检查已经变成真正的失败门禁：本轮开发过程中它多次因真实问题以退出码 1 结束，
 最终才收敛到 270/270。没有删除测试、没有降低断言、没有用跳过的方式制造通过。
@@ -258,6 +259,7 @@
   旧断言"桌面宽度被误判为 hover:none"把它判成阻断问题。
 - 修复：该断言改为非阻断提示，并记录 `maxTouchPoints`；提交 `ff15f09`。
 - run `43863488562`：`check`、`build`、`browser` 全部通过；`browser` Job 2m17s。
+- 报告更新提交 `e4e33cb` 的 run `43864182365` 也通过（`browser` 1m44s）。
 - 提示（非失败）：actions/checkout、setup-node、upload/download-artifact 仍使用 Node 20，
   Runner 给出弃用警告；Ubuntu 26 标签迁移也有提示，均不影响本轮结果。
 
@@ -305,24 +307,22 @@
 
 | 项 | 实际值 |
 |---|---|
-| GitHub `main` 最新提交 | `ff15f09 fix(ci): 兼容无指针环境的悬停判定` |
-| 本地 HEAD | `ff15f09`（与远端一致） |
-| Cloudflare 最新 Production | 部署 ID `66b74539-dedc-4e28-9c05-4718cce1c33d`，源提交 `1fb5dbb`，分支 `main` |
-| Cloudflare 线上主 JS | `assets/index-S3QYH0ri.js`（**旧版本**） |
-| GitHub Pages 最近部署 | workflow run `43863488475`，`success`，提交 `ff15f09` |
+| 本轮功能提交 / 部署源 | `e4e33cb`（后续仅报告文档更新，不改变 app 产物） |
+| Cloudflare 最新 Production | 部署 ID `3b3c09c7-24c5-4c90-892c-8864f771e96c`，源提交 `e4e33cb`，分支 `main` |
+| Cloudflare 线上主 JS | `assets/index-CtwJsM2z.js`（**包含本轮改动**） |
+| GitHub Pages 最近部署 | workflow run `43864182304`，`success`，提交 `e4e33cb` |
 | GitHub Pages 线上主 JS | `assets/index-CtwJsM2z.js`（**包含本轮改动**） |
 | 本轮构建主 JS | `assets/index-CtwJsM2z.js`（632.94 kB） |
-| 结论 | GitHub Pages 已更新；Cloudflare 仍是 `1fb5dbb`，**不包含本轮改动** |
+| 结论 | GitHub Pages 与 Cloudflare 均已更新到本轮版本 |
 
-- Cloudflare 是 Direct Upload（`wrangler pages deploy`），没有接 Git 集成，push 不会自动更新它。
-- GitHub Pages 由 `deploy-pages.yml` 在 push 后自动发布，run `43863488475` 已成功；
-  线上主 JS 已从 `index-S3QYH0ri.js` 变为 `index-CtwJsM2z.js`。
-- `npm run live:check` 默认目标是 `https://hangla-9bk.pages.dev/`（Cloudflare），
-  因此它 12/12 通过验证的仍是旧版本；GitHub Pages 备用站已跑新版本。
-- 当前具备 `wrangler` OAuth 登录（可列出部署），本轮只完成了 GitHub push 与 Pages 自动发布；
-  Cloudflare 的重新部署保留为待确认事项。
-- 需要更新 Cloudflare 时：执行 `npm run deploy:cf`，再跑 `npm run live:check`，
-  并核对主 JS 哈希应变为 `index-CtwJsM2z.js`。
+- Cloudflare 是 Direct Upload（`wrangler pages deploy`），没有接 Git 集成，push 不会自动更新它；
+  本轮已在确认后手动执行 `npm run deploy:cf`。
+- 本次 Cloudflare 部署：`✨ Success! Uploaded 6 files (4 already uploaded)`，
+  预览地址 `https://3b3c09c7.hangla-9bk.pages.dev`，生产地址不变。
+- GitHub Pages 由 `deploy-pages.yml` 在 push 后自动发布，run `43864182304` 已成功。
+- `npm run live:check` 默认目标 `https://hangla-9bk.pages.dev/` **12/12 通过**；
+  线上主 JS 已是 `index-CtwJsM2z.js`，不再是旧的 `index-S3QYH0ri.js`。
+- 后续每次改完代码仍需手动执行 `npm run deploy:cf`（Direct Upload 的已知限制）。
 
 ---
 
@@ -346,8 +346,8 @@
    本报告验证的是"文件损坏 / 解码失败"的恢复路径。
 9. **toast 仍可能遮住抽屉中部的文字**：本次只断言不遮挡底部保存 / 取消按钮；
    toast 容器是 `pointer-events-none`，不会拦截点击。
-10. **Cloudflare 未部署**：GitHub Pages 已自动更新到 `index-CtwJsM2z.js`；
-    Cloudflare 主站仍是 `1fb5dbb` / `index-S3QYH0ri.js`，需要人工执行 `npm run deploy:cf`。
+10. **Cloudflare 不会随 push 自动部署**：本轮已手动部署 `3b3c09c7`，但后续每次
+    push 后仍需执行 `npm run deploy:cf`；GitHub Pages 会自动发布，两者节奏不同。
 11. **`package.json` 版本仍是 1.4.1**：本轮按质量加固处理，没有擅自升版本号。
 12. **Actions 依赖的 Node 20 弃用提示**：checkout / setup-node / artifact 仍指向 Node 20，
     Runner 给出警告但不影响结果；后续升级到 v5 / v6 即可。
@@ -365,8 +365,9 @@
 - 存储图片表损坏时保留原始下标，不再把其他卡片的图片错配给当前卡片；
 - 坏图解码失败不再被当成成功上传；
 - 桌面端 34/34 回归通过，单位测试 281/281 通过；
-- GitHub Actions CI run `43863488562` 通过，GitHub Pages 已自动部署新版本。
+- GitHub Actions CI run `43864182365` 通过；
+- GitHub Pages 与 Cloudflare 都已更新到本轮版本，线上主 JS 为 `index-CtwJsM2z.js`。
 
-**仍未完成**：真机测试与 Cloudflare 主站部署。GitHub Pages 已随 push 更新，
-但 Cloudflare 是 Direct Upload，push 不会触发部署；需要人工执行 `npm run deploy:cf`
-并用 `npm run live:check` 核对，不能把本地构建或 GitHub Pages 发布当成 Cloudflare 已更新。
+**仍未完成**：真机测试。自动化、CI、桌面回归和线上部署都已完成；真机行为（iOS 系统分享、
+微信长按、真实软键盘与安全区）仍需在发版前人工走一遍，不能把模拟层通过当成真机通过。
+Cloudflare 的 Direct Upload 特性意味着以后每次 push 后还需要手动执行 `npm run deploy:cf`。

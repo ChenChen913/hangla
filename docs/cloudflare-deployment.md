@@ -11,9 +11,9 @@
 | Cloudflare 项目名 | `hangla` |
 | 生产地址 | **https://hangla-9bk.pages.dev/** |
 | 部署方式 | Direct Upload（`wrangler pages deploy`），**没有接 Git 集成** |
-| 最近部署 | **2026-11-16**，源提交 `1fb5dbb`（v1.4.1），部署 ID `66b74539` |
-| 当前仓库版本 | `1.4.1`（含 v1.3 存储加固、v1.4 移动端改造） |
-| 状态 | **已更新**：线上产物与仓库 `1fb5dbb` 一致，HTTP 200，缓存头与安全头生效，`live:check` 12/12 通过；本轮移动端质量加固改动仍在工作区，尚未提交 / 部署 |
+| 最近部署 | **2026-11-16**，源提交 `e4e33cb`（移动端质量加固），部署 ID `3b3c09c7` |
+| 当前仓库版本 | `1.4.1`（含 v1.3 存储加固、v1.4 移动端改造与本轮质量加固） |
+| 状态 | **已更新**：线上主 JS `index-CtwJsM2z.js`，与仓库 `e4e33cb` 的本地构建一致；HTTP 200，`live:check` 12/12 通过 |
 | 备用站 | https://chenchen913.github.io/hangla/（GitHub Pages，push 自动发布） |
 
 ### 重要：不要写成 `hangla.pages.dev`
@@ -108,10 +108,25 @@ npm run mobile:check    # 9 视口布局 + 触屏交互门禁（关键项失败�
 
 > `wrangler pages deployment list --project-name hangla` 可随时核对，最新一条应是 Production / `main`。
 >
-> 2026-11-16 后续又部署了 `c327090`（保存面板修复）与 `1fb5dbb`（导出超时保护）；
-> 截至本轮检查，最新 Production 为 `1fb5dbb` / 部署 ID `66b74539`，线上主 JS 为 `index-S3QYH0ri.js`，
-> 与仓库 `1fb5dbb` 的本地构建一致。本轮质量加固改动仍在工作区，**没有部署**；
-> 提交并走完验收后，需人工执行 `npm run deploy:cf` 再核对。
+> 2026-11-16 后续又部署了 `c327090`（保存面板修复）、`1fb5dbb`（导出超时保护）
+> 与 `e4e33cb`（移动端质量加固）。截至本轮检查，最新 Production 为 `e4e33cb` /
+> 部署 ID `3b3c09c7`，线上主 JS 为 `index-CtwJsM2z.js`，`live:check` 12/12 通过。
+
+### 3.5 本轮移动端质量加固部署（2026-11-16）
+
+```
+✨ Success! Uploaded 6 files (4 already uploaded) (4.12 sec)
+✨ Deployment complete! Take a peek over at https://3b3c09c7.hangla-9bk.pages.dev
+```
+
+| 项 | 结果 |
+|---|---|
+| 部署 ID | `3b3c09c7-24c5-4c90-892c-8864f771e96c`（Production / `main`） |
+| 源提交 | `e4e33cb`（工作区质量加固 + 报告） |
+| 线上主 JS | `assets/index-CtwJsM2z.js`（632.94 kB），与本地 `dist-web` 同名同内容 |
+| 生产地址 | https://hangla-9bk.pages.dev/ ，HTTP 200 |
+| 线上冒烟 | `npm run live:check` **12/12** |
+| GitHub Pages | run `43864182304` 成功，同为 `index-CtwJsM2z.js` |
 
 ## 4. 回滚
 
