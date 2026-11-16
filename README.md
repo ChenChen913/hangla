@@ -158,7 +158,8 @@ hangla/
 │   ├── check-facts.mjs       # 文档事实（数字 / 命令 / 链接）校验
 │   ├── project-facts.json    # README 事实的唯一来源
 │   ├── browser-check.mjs     # 真实 Chrome 回归（CDP，可选）
-│   └── mobile-check.mjs      # 移动端 9 视图布局 + 触屏交互检查（CDP，可选）
+│   ├── mobile-check.mjs      # 移动端 9 视图布局 + 触屏交互检查（CDP，可选）
+│   └── live-check.mjs        # 线上部署冒烟检查（CDP，可选）
 ├── src/
 │   ├── main.tsx              # 入口：挂载 React、旧分享链接兼容
 │   ├── App.tsx               # HashRouter + 路由切换动画
@@ -206,11 +207,12 @@ npm run preview    # 预览构建产物
 npm run docs:check # README 锚点 + 双语一致性 + 事实数字校验
 ```
 
-另有两份可选的浏览器检查脚本（需要本机装 Chrome，先 `npm run build:web` 生成 `dist-web/`）：
+另有三份可选的浏览器检查脚本（前两个需要本机装 Chrome 并先 `npm run build:web`；`live:check` 直接访问线上地址）：
 
 ```sh
 npm run browser:check   # 真实 Chrome：上传 / 拖拽 / 分享往返 / 快照恢复 / PNG 导出 / 移动端 / 存储降级
 npm run mobile:check    # 9 种视口：横向溢出、触控目标、底部抽屉、长按拖拽、长文本、导出导入
+npm run live:check      # 线上冒烟：直接打生产地址，确认部署产物、缓存头、深链接、存储降级
 ```
 
 `npm install` 会通过 `prepare` 脚本装上 husky 的 Git 钩子：提交时由 `commitlint` 按 Conventional Commits 校验提交信息（`.husky/commit-msg`），改动 README 时 `pre-commit` 会跑完整的 `npm run docs:check`（站内锚点 + 双语一致性）。

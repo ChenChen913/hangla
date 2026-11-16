@@ -160,7 +160,8 @@ hangla/
 │   ├── check-facts.mjs       # documented facts (numbers / commands / links) checker
 │   ├── project-facts.json    # single source of truth for README facts
 │   ├── browser-check.mjs     # real-Chrome regression (CDP, optional)
-│   └── mobile-check.mjs      # mobile layout + touch interaction checks across nine viewports (CDP, optional)
+│   ├── mobile-check.mjs      # mobile layout + touch interaction checks across nine viewports (CDP, optional)
+│   └── live-check.mjs        # production deployment smoke test (CDP, optional)
 ├── src/
 │   ├── main.tsx              # entry: mounts React, legacy share links
 │   ├── App.tsx               # HashRouter + route transition animation
@@ -208,11 +209,12 @@ npm run preview    # preview the build output
 npm run docs:check # README anchors + bilingual consistency + fact-number checks
 ```
 
-There are two optional browser check scripts (needs Chrome installed; run `npm run build:web` first):
+There are three optional browser check scripts (the first two need Chrome installed and a prior `npm run build:web`; `live:check` hits the live URL directly):
 
 ```sh
 npm run browser:check   # real Chrome: upload / drag / share round-trip / snapshot restore / PNG export / mobile / storage fallback
 npm run mobile:check    # nine viewports: overflow, touch targets, bottom sheets, long-press drag, long text, export/import
+npm run live:check      # production smoke test: deployed assets, cache headers, deep links, storage fallback
 ```
 
 `npm install` installs husky's Git hooks through the `prepare` script: `commitlint` validates commit messages against Conventional Commits when you commit (`.husky/commit-msg`), and `pre-commit` runs the full `npm run docs:check` (anchors + bilingual consistency) whenever a README changes.
