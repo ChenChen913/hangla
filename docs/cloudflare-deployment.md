@@ -177,7 +177,7 @@ Required reviewers。手动部署与回滚方式不变，见 §3.2 / §4。
 | 线上主 JS | `assets/index-PrOmxocu.js`（633.56 kB），与本地 `dist-web` 一致 |
 | 生产地址 | https://hangla-9bk.pages.dev/ ，HTTP 200 |
 | 线上冒烟 | `EXPECT_ASSET=index-PrOmxocu.js npm run live:check` **14/14** |
-| GitHub Pages | run `43868173655` 成功，同为 `index-PrOmxocu.js` |
+| GitHub Pages | 应用代码部署 run `43868173655` 成功，同为 `index-PrOmxocu.js` |
 | 自动部署 | 未启用：仓库尚无 `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`，`CF_DEPLOY_ENABLED` 也未设置 |
 
 ## 4. 回滚

@@ -192,16 +192,17 @@
 | 项 | 值 |
 |---|---|
 | 应用版本 | `1.4.1` |
-| 仓库 HEAD | `21ff5e4`（PR #1 合并） |
-| 最近应用代码提交 | `cfdb640`（真机兼容与发布流程） |
+| 本轮应用代码合并提交 | `21ff5e4`（PR #1 合并，应用代码提交 `cfdb640`） |
 | 本地构建主 JS | `assets/index-PrOmxocu.js`（633.56 kB） |
 | Cloudflare 最新 Production | `cb245a0c-1d52-479d-aae2-2a8a271907d2`，源提交 `21ff5e4` |
 | Cloudflare 线上主 JS | `assets/index-PrOmxocu.js` |
-| GitHub Pages 最近部署 | run `43868173655`，成功，提交 `21ff5e4` |
+| GitHub Pages 应用代码部署 | run `43868173655`，成功，提交 `21ff5e4` |
 | GitHub Pages 线上主 JS | `assets/index-PrOmxocu.js` |
-| 最近 CI | run `43868173565`，成功，提交 `21ff5e4` |
+| 本轮应用代码 CI | run `43868173565`，成功，提交 `21ff5e4` |
 | 线上冒烟 | `live-check` **14/14**，含主 JS 一致性 |
 
+- 本报告与后续文档提交只会改变仓库 HEAD，不改变 app 产物；浏览器可复核线上主 JS
+  是否仍为 `index-PrOmxocu.js`。
 - 两站现在都包含本轮应用代码（`cfdb640`）；合并提交 `21ff5e4` 只是 PR merge。
 - 本轮之后如果只改文档，线上主 JS 不应变化；`release:info` 会把"仓库 HEAD"与
   "最近应用代码提交"分开展示，避免把文档提交误认为新应用版本。
