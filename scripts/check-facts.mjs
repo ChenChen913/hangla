@@ -33,6 +33,12 @@ if (facts.node !== pkg.engines?.node) {
 if (facts.demoUrl !== pkg.homepage) {
   fail(`在线地址不一致：facts ${facts.demoUrl}，package.json ${pkg.homepage}`);
 }
+if (!facts.cloudflareProject || typeof facts.cloudflareProject !== "string") {
+  fail("facts 缺少 cloudflareProject（Cloudflare Pages 项目名）");
+}
+if (!/^https:\/\//.test(facts.githubPagesUrl ?? "")) {
+  fail("facts 的 githubPagesUrl 必须是 https 地址");
+}
 
 const scripts = Object.keys(pkg.scripts ?? {});
 for (const name of facts.scripts) {

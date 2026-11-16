@@ -25,6 +25,7 @@
     "test": "vitest run",
     "prepare": "husky",
     "docs:check": "node scripts/check-anchors.mjs README.md README_EN.md && node scripts/check-i18n.mjs && node scripts/check-facts.mjs",
+    "release:info": "node scripts/release-info.mjs",
     "browser:check": "node scripts/browser-check.mjs",
     "mobile:check": "node scripts/mobile-check.mjs --assert",
     "live:check": "node scripts/live-check.mjs"

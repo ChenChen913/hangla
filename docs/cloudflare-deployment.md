@@ -128,6 +128,41 @@ npm run mobile:check    # 9 视口布局 + 触屏交互门禁（关键项失败�
 | 线上冒烟 | `npm run live:check` **12/12** |
 | GitHub Pages | run `43864182304` 成功，同为 `index-CtwJsM2z.js` |
 
+### 3.6 GitHub Actions 自动部署（默认关闭）
+
+`.github/workflows/ci.yml` 已包含 `deploy-cloudflare` 与 `smoke` 两个 Job，但**默认不启用**：
+
+- 只有 `push` 到 `main` 才会考虑部署，PR 永远不会部署生产环境。
+- 必须先通过 `check`（单测 + 文档）、`build`（双构建）与 `browser`（桌面 + 移动端）。
+- 部署前校验 `dist-web/deploy-meta.json` 的 commit SHA 等于当前 `GITHUB_SHA`，防止误用旧产物。
+- 部署后 `smoke` 运行 `live-check`，并用 `EXPECT_ASSET` 校验线上主 JS 与本次构建一致。
+- 部署失败或冒烟失败都会让工作流失败，不会显示发布成功。
+
+启用需要两项 GitHub Secrets 与一个仓库变量：
+
+| 名称 | 类型 | 内容 |
+|---|---|---|
+| `CLOUDFLARE_API_TOKEN` | Secret | Cloudflare API Token，权限至少 `Pages:Edit` |
+| `CLOUDFLARE_ACCOUNT_ID` | Secret | Cloudflare Account ID（不是项目名） |
+| `CF_DEPLOY_ENABLED` | Repository variable | 设为 `true` 才启用自动部署 |
+
+配置方式（不要在聊天 / 仓库里粘贴密钥）：
+
+```sh
+# 本机执行时按提示粘贴值
+gh secret set CLOUDFLARE_API_TOKEN
+gh secret set CLOUDFLARE_ACCOUNT_ID
+
+# 启用自动部署
+gh variable set CF_DEPLOY_ENABLED --body true
+```
+
+未配置时，`cloudflare-disabled` Job 会在 main push 后输出 warning 与 Step Summary，
+明确说明"质量检查通过，但生产部署未执行"；这是提示，不是部署成功。
+
+如果需要人工审批，可在 GitHub 仓库 Settings → Environments → `production` 配置
+Required reviewers。手动部署与回滚方式不变，见 §3.2 / §4。
+
 ## 4. 回滚
 
 | 方式 | 命令 / 位置 |
@@ -139,9 +174,29 @@ npm run mobile:check    # 9 视口布局 + 触屏交互门禁（关键项失败�
 
 ## 5. 已知限制
 
-1. **Direct Upload 不跟 git push 联动**：每次改完代码必须手动 `npm run deploy:cf`（或后续接 Git 集成 / CI）。
-   `npm run deploy:cf` 会重新构建，所以线上永远是"当时的工作区"而不是"远端 HEAD"——部署前先确认 `git status` 干净、`git log -1` 是你要发的提交。
+1. **Direct Upload 默认仍是手动**：未配置 CI Secrets / `CF_DEPLOY_ENABLED` 时，
+   每次改完代码必须手动 `npm run deploy:cf`。手动命令会重新构建，所以线上是"当时的工作区"；
+   部署前先确认 `git status` 干净、`git log -1` 是你要发的提交。
+   启用 §3.6 的自动部署后，CI 使用当前提交的 `dist-web` 产物，并校验 `deploy-meta.json` 的 SHA。
 2. **没有自定义域名**：目前只有 `*.pages.dev`。绑定域名后要改 canonical / og:url / og:image。
 3. **双站并存**：Cloudflare 与 GitHub Pages 内容相同；canonical 已指向 Cloudflare，GitHub Pages 作为备用可继续保留。
 4. **凭据**：11-14 会话中曾明文提供 Cloudflare Token / R2 Key / GitHub PAT，记录里标注为「待确认轮换」。如果还没轮换，建议在控制台吊销旧 Token，新建一个仅 `Pages:Edit` 的 Token 用于部署。
 5. **构建环境**：旧记录提到 Windows 祖先 `node_modules/@types` 污染会导致 `TS2688`；本次在仓库自己的目录里 `npm ci` 后构建正常，无需临时 tsconfig。若再遇到，优先用干净环境 / `typeRoots` 指向项目自身。
+
+## 6. 统一发布事实
+
+- 静态部署事实（生产地址、Cloudflare 项目名、GitHub Pages 地址）放在
+  `scripts/project-facts.json`，由 `npm run docs:check` 校验；README 的线上地址与 `package.json` 的
+  `homepage` 必须一致。
+- 动态事实（仓库 HEAD、最近应用代码提交、两站线上主 JS、最近 CI / Pages 运行）用：
+
+```sh
+npm run release:info            # 打印
+npm run release:info -- --json  # 机器可读
+npm run release:info -- --check # 校验两站线上主 JS 是否等于本地构建
+```
+
+- 本文件里的部署 ID、源提交、run ID 是**部署当时的快照**；如果与 `release:info` 不一致，
+  以 `release:info` 与线上 HTML 为准，并更新本文件。
+- Cloudflare 的部署 ID 需要 `wrangler pages deployment list --project-name hangla` 读取，
+  `release:info` 不强制依赖 wrangler 登录，因此该字段仍由人工记录。

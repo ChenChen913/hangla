@@ -49,6 +49,9 @@
   做「先写正文、失败回滚」——回滚本身也会失败，多标签页交错还会造成正文与图片错配。
 - 存档 / 分享 / 导入的数据必须先过 `normalizeBoard` / `normalizeItem` / `normalizeDisplay`；
   新增字段时同步补 `BOARD_LIMITS` 上限，别让极端文本或越界数值进 Store。
+- 发布 / 部署的动态事实（HEAD、最近应用代码提交、两站线上主 JS、最近 CI）统一用
+  `npm run release:info` 读取；`--check` 校验两站线上主 JS 与本地构建一致。
+  静态部署事实放 `scripts/project-facts.json`；多份文档只写快照，不各自维护一套数字。
 - 显示设置属于本机偏好，但**快照与分享链接必须带上它**（预览 = 恢复 = 分享者所见）。
   这条是产品约定，改之前先看 README 的 FAQ。
 - README 里的数字事实（预设数、快照上限、链接阈值、图片边长、存储键）以

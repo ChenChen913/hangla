@@ -77,6 +77,29 @@ export function exportSizeProblem(plan: Extract<ExportSizePlan, { ok: false }>):
   return "榜单太长，已超出手机能生成的图片上限；先删掉几个档位或项目再试";
 }
 
+/**
+ * html-to-image 在 Canvas 创建失败 / 内存不足 / toBlob 异常时可能返回 null 或空 Blob，
+ * 而不是抛错。调用方必须把这两种情况当成失败，不能把空图交给下载 / 分享。
+ */
+export function assertExportBlob(blob: Blob | null | undefined): Blob {
+  if (!blob || blob.size === 0) {
+    throw new Error("导出生成了空图片，可能是图片过大或设备内存不足");
+  }
+  return blob;
+}
+
+/** 把导出链路的异常翻译成用户能执行的提示（不暴露堆栈） */
+export function exportFailureMessage(error: unknown): string {
+  const raw = (error as Error)?.message || String(error) || "未知原因";
+  if (/dynamically imported module|module script|chunk|加载超时|network|fetch/i.test(raw)) {
+    return "导出组件加载失败，请检查网络后重试";
+  }
+  if (/空图片|canvas|toBlob|memory|内存|too large|图片过大|out of memory/i.test(raw)) {
+    return "设备无法生成这张图（可能图片过大或内存不足），先删掉几张再试";
+  }
+  return `导出失败：${raw.slice(0, 60)}`;
+}
+
 /** iOS / iPadOS（含 iPadOS 13+ 的桌面 UA） */
 export function isIosLike(userAgent: string, maxTouchPoints = 0): boolean {
   if (/iPad|iPhone|iPod/i.test(userAgent)) return true;
@@ -89,10 +112,24 @@ export function isIosLike(userAgent: string, maxTouchPoints = 0): boolean {
  * QQ 浏览器（QQBrowser）自带下载器，不在此列。
  */
 const IN_APP_RE =
-  /MicroMessenger|Weibo|AlipayClient|DingTalk|Lark|Feishu|baiduboxapp|aweme|Instagram|FBAN|FBAV|Line\/|Snapchat/i;
+  /MicroMessenger|Weibo|AlipayClient|DingTalk|Lark|Feishu|baiduboxapp|aweme|Instagram|FBAN|FBAV|Line\/|Snapchat|QQ\//i;
 
 export function isInAppBrowser(userAgent: string): boolean {
+  // QQ 浏览器是完整浏览器（自带下载器），不能因为 UA 里带 QQ 就当成 QQ 内置 WebView
+  if (/QQBrowser/i.test(userAgent)) return false;
   return IN_APP_RE.test(userAgent);
+}
+
+/**
+ * 未识别的 Android WebView（UA 里带 `; wv)`）。
+ *
+ * `"download" in a` 只说明属性存在，不代表 WebView 真的会把文件写进下载目录。
+ * 这类环境没有明确的内置浏览器标识，但也不该按桌面 Chrome 处理。
+ */
+const GENERIC_WEBVIEW_RE = /;\s*wv\)/i;
+
+export function isGenericWebView(userAgent: string): boolean {
+  return GENERIC_WEBVIEW_RE.test(userAgent);
 }
 
 export type SaveChannel = "download" | "sheet";
@@ -116,7 +153,8 @@ export type SaveUiPlan = {
  * 原则：**已经知道不可靠的通道，不作为正常主入口**。
  * - 内置浏览器：`download` 被忽略，系统分享也常被禁用 → 只提示长按保存
  * - iOS：异步 click 会被静默拦截 → 系统分享优先，不支持则长按
- * - 桌面 / Android：直接下载可靠，保留主入口
+ * - 未识别的 Android WebView：`download` 属性存在但可能不落盘 → 分享或长按
+ * - 桌面 / Android Chrome：直接下载可靠，保留主入口
  */
 export function planSaveUi(env: {
   userAgent: string;
@@ -136,6 +174,13 @@ export function planSaveUi(env: {
 
   // iOS / iPadOS：下载会被静默拦截，优先系统分享
   if (isIosLike(ua, touchPoints)) {
+    return supportsShare
+      ? { channel: "sheet", primary: "share", showDownload: false, showShare: true, showLongPressHint: true }
+      : { channel: "sheet", primary: "longpress", showDownload: false, showShare: false, showLongPressHint: true };
+  }
+
+  // 未识别的 Android WebView：download 属性存在≠能落盘，改用分享或长按
+  if (isGenericWebView(ua)) {
     return supportsShare
       ? { channel: "sheet", primary: "share", showDownload: false, showShare: true, showLongPressHint: true }
       : { channel: "sheet", primary: "longpress", showDownload: false, showShare: false, showLongPressHint: true };

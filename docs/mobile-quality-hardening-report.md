@@ -1,5 +1,8 @@
 # 夯拉榜移动端专项质量加固报告
 
+> 历史快照：本文中的提交号 / 部署号 / CI run 是执行当时的记录。
+> 当前发布事实以 `npm run release:info` 为准；静态部署地址以 `scripts/project-facts.json` 为准。
+
 > 执行日期：2026-11-16
 > 基线：`origin/main` 提交 `1fb5dbb`（本地 HEAD 与远端一致）
 > 环境：Windows 11、Node `24.18.1`、npm `11.12.1`、Google Chrome `157.0.8103.52`（headless）

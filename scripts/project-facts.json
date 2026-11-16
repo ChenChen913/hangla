@@ -12,12 +12,15 @@
   "imageMaxSide": 640,
   "storageKey": "hangla.v3",
   "demoUrl": "https://hangla-9bk.pages.dev/",
+  "cloudflareProject": "hangla",
+  "githubPagesUrl": "https://chenchen913.github.io/hangla/",
   "scripts": [
     "dev",
     "build",
     "build:web",
     "preview",
     "test",
-    "docs:check"
+    "docs:check",
+    "release:info"
   ]
 }

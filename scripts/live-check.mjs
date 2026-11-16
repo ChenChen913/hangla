@@ -9,6 +9,7 @@
 //   LIVE_URL=https://xxx.pages.dev/ node scripts/live-check.mjs
 // 环境变量：
 //   LIVE_URL     覆盖线上地址（默认取 scripts/project-facts.json 的 demoUrl）
+//   EXPECT_ASSET 期望的线上主 JS 文件名（如 index-xxxx.js），用于部署后核对产物
 //   CHROME_PATH  指定 Chrome 可执行文件
 import { spawn } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, existsSync } from "node:fs";
@@ -18,6 +19,8 @@ import path from "node:path";
 const ROOT = process.cwd();
 const FACTS = path.join(ROOT, "scripts", "project-facts.json");
 const LIVE = process.env.LIVE_URL || JSON.parse(readFileSync(FACTS, "utf8")).demoUrl;
+/** 可选：期望的线上主 JS 文件名（部署后核对产物是否真的换了） */
+const EXPECT_ASSET = process.env.EXPECT_ASSET || "";
 const DEBUG_PORT = 9351;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -162,8 +165,17 @@ try {
     nav: [...document.querySelectorAll("nav a")].map(a => a.textContent.trim()).join("|"),
     canonical: document.querySelector('link[rel="canonical"]')?.href ?? "",
     image: document.querySelector('meta[property="og:image"]')?.content ?? "",
+    asset: document.querySelector('script[type="module"][src*="assets/index-"]')?.getAttribute("src") ?? "",
   }))()`);
   check("线上首屏加载成功", desktop.title.includes("夯拉榜"), desktop.title);
+  check("线上主 JS 可定位", !!desktop.asset, desktop.asset);
+  if (EXPECT_ASSET) {
+    check(
+      "线上主 JS 与本次构建一致",
+      desktop.asset.includes(EXPECT_ASSET),
+      `live=${desktop.asset} expected=${EXPECT_ASSET}`,
+    );
+  }
   check("桌面 1280px 无横向溢出", desktop.overflow <= 0, `${desktop.overflow}px`);
   check(
     "导航完整（编辑器 / 模板 / 我的排名）",
