@@ -11,9 +11,9 @@
 | Cloudflare 项目名 | `hangla` |
 | 生产地址 | **https://hangla-9bk.pages.dev/** |
 | 部署方式 | Direct Upload（`wrangler pages deploy`），**没有接 Git 集成** |
-| 最近部署 | **2026-11-16**，源提交 `e4e33cb`（移动端质量加固），部署 ID `3b3c09c7` |
-| 当前仓库版本 | `1.4.1`（含 v1.3 存储加固、v1.4 移动端改造与本轮质量加固） |
-| 状态 | **已更新**：线上主 JS `index-CtwJsM2z.js`，与仓库 `e4e33cb` 的本地构建一致；HTTP 200，`live:check` 12/12 通过 |
+| 最近部署 | **2026-11-16**，源提交 `21ff5e4`（真机兼容与发布流程），部署 ID `cb245a0c` |
+| 当前仓库版本 | `1.4.1`（含 v1.3 存储加固、v1.4 移动端改造与本轮真机兼容加固） |
+| 状态 | **已更新**：线上主 JS `index-PrOmxocu.js`，与仓库 `21ff5e4` 的本地构建一致；HTTP 200，`live:check` 14/14 通过 |
 | 备用站 | https://chenchen913.github.io/hangla/（GitHub Pages，push 自动发布） |
 
 ### 重要：不要写成 `hangla.pages.dev`
@@ -162,6 +162,23 @@ gh variable set CF_DEPLOY_ENABLED --body true
 
 如果需要人工审批，可在 GitHub 仓库 Settings → Environments → `production` 配置
 Required reviewers。手动部署与回滚方式不变，见 §3.2 / §4。
+
+### 3.7 真机兼容与发布流程部署（2026-11-16）
+
+```
+✨ Success! Uploaded 5 files (5 already uploaded) (5.94 sec)
+✨ Deployment complete! Take a peek over at https://cb245a0c.hangla-9bk.pages.dev
+```
+
+| 项 | 结果 |
+|---|---|
+| 部署 ID | `cb245a0c-1d52-479d-aae2-2a8a271907d2`（Production / `main`） |
+| 源提交 | `21ff5e4`（PR #1 合并，应用代码提交 `cfdb640`） |
+| 线上主 JS | `assets/index-PrOmxocu.js`（633.56 kB），与本地 `dist-web` 一致 |
+| 生产地址 | https://hangla-9bk.pages.dev/ ，HTTP 200 |
+| 线上冒烟 | `EXPECT_ASSET=index-PrOmxocu.js npm run live:check` **14/14** |
+| GitHub Pages | run `43868173655` 成功，同为 `index-PrOmxocu.js` |
+| 自动部署 | 未启用：仓库尚无 `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`，`CF_DEPLOY_ENABLED` 也未设置 |
 
 ## 4. 回滚
 
